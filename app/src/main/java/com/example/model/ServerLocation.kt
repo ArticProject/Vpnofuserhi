@@ -5,7 +5,9 @@ data class ServerLocation(
     val country: String,
     val city: String,
     val countryCode: String,
-    val flagEmoji: String,
+    val cityCode: String,
+    val flagEmoji: String = "",
+    val photoUrl: String = "",
     val pingMs: Int,
     val loadPercent: Int,
     val ipAddress: String,
@@ -15,5 +17,5 @@ data class ServerLocation(
     val isStealth: Boolean = false,
     val isFavorite: Boolean = false
 ) {
-    val fullName: String get() = "$country · $city"
+    val fullName: String get() = "$city, $countryCode"
 }

@@ -74,10 +74,21 @@ fun ServerInspectorDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = server.flagEmoji,
-                        fontSize = 32.sp
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF09090B)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = server.cityCode,
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 14.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
@@ -105,7 +116,19 @@ fun ServerInspectorDialog(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Architectural Cityscape Panoramic Photo View
+            com.example.ui.components.CapitalCityPhotoView(
+                server = server,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp),
+                darkenFactor = 0.25f,
+                showCoordinates = true
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
 
             // Specs Box
             Column(

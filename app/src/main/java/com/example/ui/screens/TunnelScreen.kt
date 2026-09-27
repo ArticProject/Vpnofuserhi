@@ -35,6 +35,7 @@ import com.example.model.ServerLocation
 import com.example.model.VpnProtocol
 import com.example.model.VpnState
 import com.example.ui.components.VellorAnnouncementBar
+import com.example.ui.components.VellorCategoryBanners
 import com.example.ui.components.VellorFeaturedNodesSection
 import com.example.ui.components.VellorHeader
 import com.example.ui.components.VellorHeadlineSection
@@ -69,20 +70,21 @@ fun TunnelScreen(
             VellorAnnouncementBar(vpnState = vpnState)
         }
 
-        // 2. Top Brand Header: "VL" + "Vellor" + "2" + "☰"
+        // 2. Top Brand Header: "VL" + "Vellor" + Active City Code + "☰"
         item {
             VellorHeader(
-                activeNodeCount = allServers.size,
+                activeCityCode = selectedServer.cityCode,
                 isConnected = isConnected,
                 onMenuClick = onMenuClick
             )
         }
 
-        // 3. Hero Visual Architectural Card with Center Play/Connect Button (matching Screenshot 1)
+        // 3. Hero Visual Architectural Card with Center Dial (matching Screenshot 1)
         item {
             Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
                 VellorHeroCard(
                     vpnState = vpnState,
+                    selectedServer = selectedServer,
                     onToggleConnect = onToggleConnect
                 )
             }
@@ -92,57 +94,22 @@ fun TunnelScreen(
         item {
             Spacer(modifier = Modifier.height(18.dp))
             VellorHeadlineSection(
-                onOpenNodesClick = onOpenServerPicker,
+                vpnState = vpnState,
+                selectedServer = selectedServer,
+                onToggleConnect = onToggleConnect,
                 onInspectClick = { onInspectServer(selectedServer) }
             )
         }
 
-        // 5. Minimalist Telemetry Grid (Crisp white editorial cards)
-        if (isConnected) {
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    Text(
-                        text = "LIVE TELEMETRY",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF71717A),
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.4.sp,
-                        fontSize = 11.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        EditorialStatCard(
-                            modifier = Modifier.weight(1f),
-                            title = "DOWNLINK",
-                            value = String.format("%.1f MB/s", downloadSpeedMb),
-                            icon = Icons.Filled.ArrowDownward,
-                            accentColor = VellorEmerald
-                        )
-                        EditorialStatCard(
-                            modifier = Modifier.weight(1f),
-                            title = "UPLINK",
-                            value = String.format("%.1f MB/s", uploadSpeedMb),
-                            icon = Icons.Filled.ArrowUpward,
-                            accentColor = Color(0xFF09090B)
-                        )
-                        EditorialStatCard(
-                            modifier = Modifier.weight(1f),
-                            title = "TIME",
-                            value = durationFormatted,
-                            icon = Icons.Filled.Timer,
-                            accentColor = Color(0xFF09090B)
-                        )
-                    }
-                }
-            }
+        // 5. Category Banners (Women, Men, Accessories matching the video!)
+        item {
+            Spacer(modifier = Modifier.height(26.dp))
+            VellorCategoryBanners(
+                onCategoryClick = { onOpenServerPicker() }
+            )
         }
 
-        // 6. "FEATURED" -> "Selected nodes" 2-Column Product Grid (matching Screenshot 2!)
+        // 6. "FEATURED" -> "Selected nodes" 2-Column Product Grid (matching Screenshot 2 & video!)
         item {
             Spacer(modifier = Modifier.height(32.dp))
             VellorFeaturedNodesSection(
@@ -151,52 +118,6 @@ fun TunnelScreen(
                 isConnected = isConnected,
                 onSelectServer = onSelectServer,
                 onInspectServer = onInspectServer
-            )
-        }
-    }
-}
-
-@Composable
-private fun EditorialStatCard(
-    title: String,
-    value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    accentColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White)
-            .border(1.dp, Color(0xFFE5E5EA), RoundedCornerShape(16.dp))
-            .padding(12.dp)
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF71717A),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(12.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = value,
-                color = Color(0xFF09090B),
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
             )
         }
     }

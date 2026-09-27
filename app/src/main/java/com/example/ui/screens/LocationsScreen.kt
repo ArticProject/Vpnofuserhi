@@ -248,10 +248,20 @@ private fun ServerItemRow(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = server.flagEmoji,
-                    fontSize = 24.sp
-                )
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF09090B)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    com.example.ui.components.CapitalCityPhotoView(
+                        server = server,
+                        modifier = Modifier.fillMaxSize(),
+                        darkenFactor = 0.25f,
+                        showCoordinates = false
+                    )
+                }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {

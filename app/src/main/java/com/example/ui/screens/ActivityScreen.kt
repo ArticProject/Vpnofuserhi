@@ -298,10 +298,21 @@ private fun SessionItemRow(session: VpnSession) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = session.flagEmoji,
-                    fontSize = 24.sp
-                )
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF09090B)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = session.city.take(3).uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(

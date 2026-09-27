@@ -83,7 +83,7 @@ fun VellorSafariBar(
                 Icon(
                     imageVector = Icons.Filled.Lock,
                     contentDescription = "Encrypted SSL",
-                    tint = if (isConnected) VellorEmerald else Color(0xFF71717A),
+                    tint = Color(0xFF09090B),
                     modifier = Modifier.size(14.dp)
                 )
 

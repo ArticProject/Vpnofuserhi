@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,10 +20,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,21 +35,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ServerLocation
+import com.example.model.VpnState
 import com.example.ui.theme.VellorEmerald
 
 /**
  * Headline & Pill Actions Section from Screenshot 1:
- * "NEW COLLECTION"
- * "Everyday clothing with a sharp silhouette." -> "Everyday privacy with a sharp silhouette."
- * "Minimal pieces for women, men and accessories in one clean store."
- * [Open catalog] [Checkout] -> [Open nodes] [Inspect node]
+ * "NEW PROTOCOL"
+ * "Everyday privacy with a sharp silhouette."
+ * "Minimal sovereign tunnel for Android, iOS and accessories in one clean interface."
+ * [Connect Tunnel] [Inspect node]
  */
 @Composable
 fun VellorHeadlineSection(
-    onOpenNodesClick: () -> Unit,
+    vpnState: VpnState,
+    selectedServer: ServerLocation,
+    onToggleConnect: () -> Unit,
     onInspectClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isConnected = vpnState == VpnState.CONNECTED
+    val isConnecting = vpnState == VpnState.CONNECTING || vpnState == VpnState.DISCONNECTING
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -79,7 +84,7 @@ fun VellorHeadlineSection(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Minimal sovereign tunnel for Android, iOS and accessories in one clean interface.",
+            text = "Minimal sovereign tunnel routing device traffic through ${selectedServer.city} and global nodes.",
             style = MaterialTheme.typography.bodyLarge,
             color = Color(0xFF71717A),
             lineHeight = 22.sp,
@@ -88,32 +93,45 @@ fun VellorHeadlineSection(
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        // Two signature pill buttons (matching Screenshot 1!)
+        // Two signature pill buttons (matching Screenshot 1)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Solid Black Pill: "Open catalog" -> "Open nodes"
+            // Primary Pill: Direct Connection Toggle (Connect / Disconnect)
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(CircleShape)
-                    .background(Color(0xFF09090B))
-                    .clickable(onClick = onOpenNodesClick)
+                    .background(if (isConnected) Color(0xFF09090B) else Color(0xFF09090B))
+                    .clickable(onClick = onToggleConnect)
                     .padding(vertical = 15.dp)
-                    .testTag("open_nodes_button"),
+                    .testTag("primary_connection_pill"),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Open nodes",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    letterSpacing = 0.2.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = when {
+                            isConnecting -> "Connecting..."
+                            isConnected -> "Disconnect"
+                            else -> "Connect Tunnel"
+                        },
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 0.2.sp
+                    )
+                }
             }
 
-            // White Pill with Thin Border: "Checkout" -> "Inspect node"
+            // Secondary Pill: White with thin border
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -126,7 +144,7 @@ fun VellorHeadlineSection(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Inspect node",
+                    text = "Inspect (${selectedServer.cityCode})",
                     color = Color(0xFF09090B),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 13.sp,
@@ -140,8 +158,8 @@ fun VellorHeadlineSection(
 /**
  * 2-Column Grid of Selected Nodes matching Screenshot 2:
  * "FEATURED"
- * "Selected pieces" -> "Selected nodes"
- * "A quick edit from the full catalog." -> "A quick edit from the full network."
+ * "Selected nodes"
+ * "A quick edit from the full network."
  */
 @Composable
 fun VellorFeaturedNodesSection(
@@ -218,13 +236,7 @@ fun VellorFeaturedNodesSection(
 
 /**
  * Individual Node Card matching Screenshot 2:
- * - Rounded card container (#FFFFFF or #F4F4F6)
- * - Top-left badge: White pill "Inspect"
- * - Monochrome sculptural illustration
- * - Tag: "SWITZERLAND"
- * - Title: "Zurich Bulldozer Hardware"
- * - Spec pills: "12ms", "10G", "P2P", "TLS" (like shoe sizes "35, 36, 37, 38")
- * - Price & Action: "12 ms" on left, solid black pill "Connect" / "Active" on right (like "Add to cart")
+ * NO EMOJIS! Uses uppercase city name, capital, and 3-letter city code badge!
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -248,14 +260,22 @@ fun VellorNodeCard(
             )
             .padding(12.dp)
     ) {
-        // Visual Preview Container with "Inspect" badge in top-left
+        // Visual Preview Container: Architectural City View with "Inspect" badge in top-left
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(130.dp)
+                .height(138.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFFF4F4F6))
+                .background(Color(0xFF0F0F12))
         ) {
+            // High-resolution architectural capital city photo with vector fallback
+            CapitalCityPhotoView(
+                server = server,
+                modifier = Modifier.fillMaxSize(),
+                darkenFactor = 0.25f,
+                showCoordinates = true
+            )
+
             // "Inspect" Pill Badge in top-left (matching screenshot 2!)
             Box(
                 modifier = Modifier
@@ -275,22 +295,21 @@ fun VellorNodeCard(
                 )
             }
 
-            // High-fashion sculptural node emblem
-            Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // City Code Monogram in bottom-left
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.Black.copy(alpha = 0.75f))
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
             ) {
                 Text(
-                    text = server.flagEmoji,
-                    fontSize = 32.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = server.city.uppercase(),
-                    color = Color(0xFF09090B),
+                    text = server.cityCode,
+                    color = Color.White,
                     fontWeight = FontWeight.Black,
-                    fontSize = 11.sp,
-                    letterSpacing = 1.sp
+                    fontSize = 10.sp,
+                    letterSpacing = 0.8.sp
                 )
             }
         }
@@ -311,7 +330,7 @@ fun VellorNodeCard(
 
         // Title (mirroring "Balenciaga Bulldozer Hardware")
         Text(
-            text = "${server.city} Bulldozer 01",
+            text = "${server.city} Hardware 01",
             style = MaterialTheme.typography.titleMedium,
             color = Color(0xFF09090B),
             fontWeight = FontWeight.Bold,
@@ -363,7 +382,7 @@ fun VellorNodeCard(
         ) {
             Text(
                 text = "${server.pingMs} ms",
-                color = if (server.pingMs < 30) VellorEmerald else Color(0xFF09090B),
+                color = Color(0xFF09090B),
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp
             )
@@ -372,7 +391,7 @@ fun VellorNodeCard(
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(if (isConnected) VellorEmerald else Color(0xFF09090B))
+                    .background(Color(0xFF09090B))
                     .clickable(onClick = onConnect)
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .testTag("node_connect_${server.id}"),
