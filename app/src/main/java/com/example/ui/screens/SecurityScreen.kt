@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,16 +19,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,7 +44,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AppLanguage
 import com.example.model.VpnProtocol
-import com.example.ui.theme.VellorEmerald
+import com.example.ui.components.bounceClick
+import com.example.ui.theme.DarkSurfaceBorder
+import com.example.ui.theme.DarkSurfaceCard
+import com.example.ui.theme.DarkSurfaceInner
 
 @Composable
 fun SecurityScreen(
@@ -50,191 +61,265 @@ fun SecurityScreen(
     onToggleStealth: () -> Unit,
     onToggleDoubleHop: () -> Unit,
     onToggleAdBlock: () -> Unit,
-    isDarkTheme: Boolean = true,
+    isDarkTheme: Boolean = false,
     currentLanguage: AppLanguage = AppLanguage.SYSTEM,
     modifier: Modifier = Modifier
 ) {
     val isRu = currentLanguage == AppLanguage.RUSSIAN
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        contentPadding = PaddingValues(top = 24.dp, bottom = 120.dp)
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp)
     ) {
         item {
             Text(
-                text = if (isRu) "ШИФРОВАНИЕ И БЕЗОПАСНОСТЬ" else "SECURITY & ENCRYPTION",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
-                color = Color(0xFFA1A1AA)
+                text = if (isRu) "Защита и Протоколы" else "Shield & Protocols",
+                style = MaterialTheme.typography.headlineMedium,
+                color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = if (isRu) "Криптографическая стойкость и защита без компромиссов"
+                       else "Cryptographic integrity and zero-compromise protections",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = if (isRu) "Протокол связи" else "Tunnel Protocol",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isDarkTheme) Color.White else Color.Black
+                text = if (isRu) "ПРОТОКОЛ ТУННЕЛЯ" else "TUNNEL PROTOCOL",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.2.sp
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
         }
 
         items(VpnProtocol.values().size) { index ->
             val proto = VpnProtocol.values()[index]
             val isSelected = proto == currentProtocol
 
+            val protoBorderCol by animateColorAsState(
+                targetValue = if (isSelected) {
+                    if (isDarkTheme) Color.White else Color(0xFF09090B)
+                } else {
+                    if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA)
+                },
+                animationSpec = spring(stiffness = 400f),
+                label = "proto_border_col"
+            )
+            val protoBorderW by animateDpAsState(
+                targetValue = if (isSelected) 1.6.dp else 1.dp,
+                animationSpec = spring(stiffness = 400f),
+                label = "proto_border_w"
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isDarkTheme) Color(0xFF141416) else Color(0xFFF4F4F5))
+                    .padding(vertical = 5.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (isDarkTheme) DarkSurfaceCard else Color.White)
                     .border(
-                        1.dp,
-                        if (isSelected) VellorEmerald else Color(0xFF27272A),
-                        RoundedCornerShape(16.dp)
+                        width = protoBorderW,
+                        color = protoBorderCol,
+                        shape = RoundedCornerShape(18.dp)
                     )
-                    .clickable { onSelectProtocol(proto) }
-                    .padding(16.dp)
+                    .bounceClick(scaleDown = 0.96f) { onSelectProtocol(proto) }
+                    .padding(14.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = proto.displayName,
-                                fontSize = 15.sp,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (isDarkTheme) Color.White else Color(0xFF09090B),
                                 fontWeight = FontWeight.Bold,
-                                color = if (isDarkTheme) Color.White else Color.Black
+                                fontSize = 15.sp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF27272A))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isDarkTheme) DarkSurfaceInner else Color(0xFF09090B))
+                                    .border(0.8.dp, if (isDarkTheme) DarkSurfaceBorder else Color.Transparent, CircleShape)
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = proto.badge,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) VellorEmerald else Color(0xFFA1A1AA)
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
                             text = proto.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
                             fontSize = 12.sp,
-                            color = Color(0xFFA1A1AA)
+                            lineHeight = 16.sp
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Cipher: ${proto.cipher}",
+                            fontSize = 11.sp,
+                            color = if (isDarkTheme) Color(0xFF71717A) else Color(0xFFA1A1AA)
+                        )
+                    }
+
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(if (isDarkTheme) DarkSurfaceInner else Color(0xFF09090B))
+                                .border(1.dp, if (isDarkTheme) DarkSurfaceBorder else Color.Transparent, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = "Selected",
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
         }
 
         item {
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = if (isRu) "ФУНКЦИИ ЗАЩИТЫ" else "PROTECTION MODULES",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
-                color = Color(0xFFA1A1AA)
+                text = if (isRu) "ПАКЕТ БЕЗОПАСНОСТИ" else "SECURITY SUITE",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.2.sp
             )
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            SecurityToggleItem(
-                title = if (isRu) "Аварийная блокировка (Kill Switch)" else "Kill Switch",
-                desc = if (isRu) "Блокирует интернет при случайном разрыве туннеля" else "Block internet if VPN disconnects",
+            SecurityToggleRow(
+                icon = Icons.Filled.Lock,
+                title = if (isRu) "Аварийная блокировка (Kill Switch)" else "Hardware Kill Switch",
+                description = if (isRu) "Мгновенно блокирует трафик при разрыве соединения." else "Block all non-tunnel traffic immediately if connection drops.",
                 checked = killSwitch,
-                onCheckedChange = { onToggleKillSwitch() },
-                isDarkTheme = isDarkTheme
+                isDarkTheme = isDarkTheme,
+                onCheckedChange = { onToggleKillSwitch() }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            SecurityToggleItem(
-                title = if (isRu) "Маскировка трафика (Stealth)" else "Stealth Camouflage",
-                desc = if (isRu) "Имитирует обычный HTTPS трафик против DPI фильтров" else "Camouflage VPN packets as web traffic",
+            SecurityToggleRow(
+                icon = Icons.Filled.VisibilityOff,
+                title = if (isRu) "Маскировка (Stealth Mode)" else "Stealth Mode (Obfuscation)",
+                description = if (isRu) "Маскирует пакеты VPN под обычный HTTPS трафик." else "Disguise VPN packets as standard HTTPS traffic to bypass deep packet inspection.",
                 checked = stealth,
-                onCheckedChange = { onToggleStealth() },
-                isDarkTheme = isDarkTheme
+                isDarkTheme = isDarkTheme,
+                onCheckedChange = { onToggleStealth() }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            SecurityToggleItem(
-                title = if (isRu) "Двойной прыжок (Double Hop)" else "Double Hop Routing",
-                desc = if (isRu) "Шифрование через две независимые ноды подряд" else "Route traffic through two chained servers",
+            SecurityToggleRow(
+                icon = Icons.Filled.Security,
+                title = if (isRu) "Двойное шифрование (Double Hop)" else "Double Hop Encryption",
+                description = if (isRu) "Маршрутизация через два независимых сервера в разных юрисдикциях." else "Route traffic through two consecutive sovereign servers in different jurisdictions.",
                 checked = doubleHop,
-                onCheckedChange = { onToggleDoubleHop() },
-                isDarkTheme = isDarkTheme
+                isDarkTheme = isDarkTheme,
+                onCheckedChange = { onToggleDoubleHop() }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            SecurityToggleItem(
-                title = if (isRu) "Блокировщик рекламы и трекеров" else "Ad & Tracker Shield",
-                desc = if (isRu) "DNS-фильтрация вредоносных баннеров и слежки" else "DNS filtering of telemetry trackers",
+            SecurityToggleRow(
+                icon = Icons.Filled.Block,
+                title = if (isRu) "Фильтрация трекеров и рекламы" else "Zero-Trace Tracker Sinkhole",
+                description = if (isRu) "Перехват телеметрии и вредоносных доменов на уровне DNS." else "DNS-level interception of malware, telemetry, and surveillance domains.",
                 checked = adBlock,
-                onCheckedChange = { onToggleAdBlock() },
-                isDarkTheme = isDarkTheme
+                isDarkTheme = isDarkTheme,
+                onCheckedChange = { onToggleAdBlock() }
             )
+
+            Spacer(modifier = Modifier.height(60.dp))
         }
     }
 }
 
 @Composable
-private fun SecurityToggleItem(
+fun SecurityToggleRow(
+    icon: ImageVector,
     title: String,
-    desc: String,
+    description: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    isDarkTheme: Boolean
+    isDarkTheme: Boolean,
+    onCheckedChange: (Boolean) -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isDarkTheme) Color(0xFF141416) else Color(0xFFF4F4F5))
-            .border(1.dp, Color(0xFF27272A), RoundedCornerShape(16.dp))
-            .padding(16.dp)
+            .padding(vertical = 5.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (isDarkTheme) DarkSurfaceCard else Color.White)
+            .border(
+                1.dp,
+                if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA),
+                RoundedCornerShape(18.dp)
+            )
+            .bounceClick(scaleDown = 0.98f) { onCheckedChange(!checked) }
+            .padding(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isDarkTheme) DarkSurfaceInner else Color(0xFFF4F4F6)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDarkTheme) Color.White else Color.Black
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                    fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = desc,
-                    fontSize = 11.sp,
-                    color = Color(0xFFA1A1AA)
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.Black,
-                    checkedTrackColor = VellorEmerald
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = if (isDarkTheme) DarkSurfaceInner else Color(0xFF09090B),
+                    uncheckedThumbColor = if (isDarkTheme) Color(0xFFA1A1AA) else Color.White,
+                    uncheckedTrackColor = if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA)
                 )
             )
         }

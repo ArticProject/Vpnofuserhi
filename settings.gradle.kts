@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "VellorVPN"
+rootProject.name = "Vellor"
 include(":app")

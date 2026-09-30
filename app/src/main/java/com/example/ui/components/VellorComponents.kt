@@ -1,11 +1,20 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,14 +32,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,9 +46,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,119 +59,103 @@ import com.example.model.AppLanguage
 import com.example.model.ServerLocation
 import com.example.model.VpnState
 import com.example.ui.theme.VellorEmerald
-import com.example.ui.theme.VellorEmeraldGlow
 
 @Composable
 fun VellorHeader(
-    activeCityCode: String,
-    isDarkTheme: Boolean,
-    onToggleDarkTheme: (Boolean) -> Unit,
-    currentLanguage: AppLanguage,
-    onSelectLanguage: (AppLanguage) -> Unit,
-    onResetOnboarding: () -> Unit,
+    activeCityCode: String = "FRA",
+    isDarkTheme: Boolean = false,
+    onToggleDarkTheme: (Boolean) -> Unit = {},
+    currentLanguage: AppLanguage = AppLanguage.SYSTEM,
+    onSelectLanguage: (AppLanguage) -> Unit = {},
+    onResetOnboarding: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showMenu by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Left: Uncompleted Infinity Icon (Meta-style) + Vellor App Name
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { menuExpanded = true }
+        ) {
+            OpenInfinityLogo(
+                size = 28.dp,
+                color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                strokeWidth = 3.2f
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Text(
+                text = "Vellor",
+                style = MaterialTheme.typography.titleLarge,
+                color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                letterSpacing = (-0.5).sp
+            )
+        }
+
+        // Right: Active city code badge + hamburger menu (with dropdown)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .height(36.dp)
                     .clip(CircleShape)
-                    .background(if (isDarkTheme) Color.White else Color.Black),
+                    .background(if (isDarkTheme) Color.White else Color(0xFF09090B))
+                    .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "VL",
-                    color = if (isDarkTheme) Color.Black else Color.White,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp,
-                    letterSpacing = (-0.5).sp
-                )
-            }
-            Text(
-                text = "VELLOR",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 2.sp,
-                color = if (isDarkTheme) Color.White else Color.Black
-            )
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(if (isDarkTheme) Color(0xFF18181B) else Color(0xFFF4F4F5))
-                    .border(
-                        1.dp,
-                        if (isDarkTheme) Color(0xFF27272A) else Color(0xFFE4E4E7),
-                        RoundedCornerShape(20.dp)
-                    )
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
                     text = activeCityCode,
-                    fontSize = 11.sp,
+                    color = if (isDarkTheme) Color(0xFF09090B) else Color.White,
                     fontWeight = FontWeight.Bold,
-                    color = if (isDarkTheme) Color.White else Color.Black
+                    fontSize = 13.sp,
+                    letterSpacing = 1.sp
                 )
             }
 
-            Box {
-                IconButton(onClick = { showMenu = true }) {
+            Box(contentAlignment = Alignment.TopEnd) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isDarkTheme) Color(0xFF18181B) else Color.White)
+                        .border(
+                            1.dp,
+                            if (isDarkTheme) Color(0xFF27272A) else Color(0xFFE5E5EA),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .clickable { menuExpanded = !menuExpanded },
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Options",
-                        tint = if (isDarkTheme) Color.White else Color.Black
+                        imageVector = Icons.Outlined.Menu,
+                        contentDescription = "Preferences Menu",
+                        tint = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (currentLanguage == AppLanguage.RUSSIAN) "Сменить язык (EN/RU)"
-                                else "Change Language (RU/EN)"
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            if (currentLanguage == AppLanguage.RUSSIAN) {
-                                onSelectLanguage(AppLanguage.ENGLISH)
-                            } else {
-                                onSelectLanguage(AppLanguage.RUSSIAN)
-                            }
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (isDarkTheme) "Светлая тема" else "Тёмная тема"
-                            )
-                        },
-                        onClick = {
-                            showMenu = false
-                            onToggleDarkTheme(!isDarkTheme)
-                        }
-                    )
-                }
+                // Dropdown popup for Theme and Language
+                VellorPreferencesMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    isDarkTheme = isDarkTheme,
+                    onToggleDarkTheme = onToggleDarkTheme,
+                    currentLanguage = currentLanguage,
+                    onSelectLanguage = onSelectLanguage,
+                    onResetOnboarding = onResetOnboarding
+                )
             }
         }
     }
@@ -178,17 +171,6 @@ fun VellorHeroCard(
     val isConnected = vpnState == VpnState.CONNECTED
     val isConnecting = vpnState == VpnState.CONNECTING || vpnState == VpnState.DISCONNECTING
 
-    val pulseTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by pulseTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -196,18 +178,36 @@ fun VellorHeroCard(
             .clip(RoundedCornerShape(24.dp))
             .background(Color(0xFF09090B))
     ) {
+        // High-resolution architectural photo (Tokyo / Capital city)
         CapitalCityPhotoView(
             server = selectedServer,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            darkenFactor = 0.35f
         )
 
-        // Bottom left plate
+        // Vignette gradient
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.25f),
+                            Color.Black.copy(alpha = 0.55f)
+                        )
+                    )
+                )
+        )
+
+        // Overlay Card on the left: Country and Capital plate
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 18.dp, bottom = 22.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.Black.copy(alpha = 0.85f))
+                .background(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(12.dp)
+                )
                 .border(0.8.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
@@ -219,147 +219,145 @@ fun VellorHeroCard(
                             .clip(CircleShape)
                             .background(if (isConnected) VellorEmerald else Color.White)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(7.dp))
                     Text(
-                        text = selectedServer.city.uppercase(),
+                        text = "${selectedServer.country.uppercase()} · ${selectedServer.city.uppercase()}",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.2.sp
                     )
                 }
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "${selectedServer.flagEmoji} ${selectedServer.country}",
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontSize = 11.sp
+                    text = "NATIONAL CAPITAL\nWIREGUARD 10G\nSECURE GATEWAY",
+                    color = Color.White.copy(alpha = 0.95f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black,
+                    lineHeight = 17.sp,
+                    letterSpacing = (-0.2).sp
                 )
             }
         }
 
-        // Bottom right dial
+        // Connection Dial on the right
         Box(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 18.dp, bottom = 18.dp)
+                .align(Alignment.CenterEnd)
+                .padding(end = 24.dp),
+            contentAlignment = Alignment.Center
         ) {
-            if (isConnecting) {
-                Box(
-                    modifier = Modifier
-                        .size(68.dp)
-                        .scale(pulseScale)
-                        .clip(CircleShape)
-                        .background(VellorEmeraldGlow)
-                )
-            }
+            // Ethereal harmonic multi-layer pulse rings when Connected
+            HarmonicPulseRings(
+                baseSize = 96.dp,
+                ringColor = Color.White,
+                active = isConnected
+            )
+
+            // High-precision rotating cyber ring only when Linking
+            ConnectingSpinner(isConnecting = isConnecting)
+
+            // Outer dark ring with animated border
+            val outerBorderColor by animateColorAsState(
+                targetValue = if (isConnected) Color.White else Color.White.copy(alpha = 0.6f),
+                animationSpec = spring(stiffness = 300f),
+                label = "dial_outer_border"
+            )
 
             Box(
                 modifier = Modifier
-                    .size(68.dp)
+                    .size(96.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (isConnected) VellorEmerald
-                        else Color.Black.copy(alpha = 0.90f)
-                    )
-                    .border(
-                        width = 1.2.dp,
-                        color = if (isConnected) VellorEmerald else Color.White.copy(alpha = 0.35f),
-                        shape = CircleShape
-                    )
-                    .clickable { onToggleConnect() },
+                    .background(Color.Black.copy(alpha = 0.70f))
+                    .border(2.dp, outerBorderColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.PowerSettingsNew,
-                    contentDescription = "Connect",
-                    tint = if (isConnected) Color.Black else Color.White,
-                    modifier = Modifier.size(28.dp)
+                val buttonBg by animateColorAsState(
+                    targetValue = if (isConnected) Color.White else Color(0xFF09090B),
+                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 350f),
+                    label = "dial_btn_bg"
                 )
+                val iconTint by animateColorAsState(
+                    targetValue = if (isConnected) Color(0xFF09090B) else Color.White,
+                    animationSpec = spring(stiffness = 350f),
+                    label = "dial_icon_tint"
+                )
+
+                // Inner button with tactile bounce compression on tap
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(buttonBg)
+                        .bounceClick(scaleDown = 0.91f, onClick = onToggleConnect)
+                        .testTag("hero_power_dial"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        AnimatedContent(
+                            targetState = vpnState,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = spring(stiffness = 500f)) + scaleIn(initialScale = 0.8f, animationSpec = spring(stiffness = 500f)))
+                                    .togetherWith(fadeOut(animationSpec = spring(stiffness = 500f)) + scaleOut(targetScale = 0.8f, animationSpec = spring(stiffness = 500f)))
+                            },
+                            label = "dial_icon_anim"
+                        ) { targetState ->
+                            Icon(
+                                imageVector = when (targetState) {
+                                    VpnState.CONNECTED -> Icons.Filled.Lock
+                                    VpnState.CONNECTING, VpnState.DISCONNECTING -> Icons.Filled.PowerSettingsNew
+                                    VpnState.DISCONNECTED -> Icons.Filled.PowerSettingsNew
+                                    else -> Icons.Filled.PowerSettingsNew
+                                },
+                                contentDescription = "Toggle Connection",
+                                tint = iconTint,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(3.dp))
+
+                        Text(
+                            text = when (vpnState) {
+                                VpnState.CONNECTED -> "SECURE"
+                                VpnState.CONNECTING, VpnState.DISCONNECTING -> "LINKING"
+                                VpnState.DISCONNECTED -> "CONNECT"
+                            },
+                            color = iconTint,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.1.sp
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun VellorHeadlineSection(
-    vpnState: VpnState,
-    selectedServer: ServerLocation,
-    onToggleConnect: () -> Unit,
-    onInspectClick: () -> Unit,
-    currentLanguage: AppLanguage = AppLanguage.SYSTEM,
-    modifier: Modifier = Modifier
-) {
-    val isRu = currentLanguage == AppLanguage.RUSSIAN
-    val isConnected = vpnState == VpnState.CONNECTED
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-    ) {
-        Text(
-            text = if (isRu) "НОВЫЙ ПРОТОКОЛ" else "NEW PROTOCOL",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 2.sp,
-            color = Color(0xFFA1A1AA)
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = if (isRu) "Приватность каждый день.\nЧёткий силуэт."
-            else "Everyday privacy with\na sharp silhouette.",
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 32.sp
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isConnected) VellorEmerald else Color(0xFF18181B))
-                    .clickable { onToggleConnect() }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = if (isConnected) {
-                        if (isRu) "● ПОДКЛЮЧЕНО" else "● CONNECTED"
-                    } else {
-                        if (isRu) "ПОДКЛЮЧИТЬ" else "CONNECT"
-                    },
-                    color = if (isConnected) Color.Black else Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF18181B))
-                    .clickable { onInspectClick() }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Tune,
-                        contentDescription = "Inspect",
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (isRu) "ИНФО О НОДЕ" else "INSPECT",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
+private fun ConnectingSpinner(isConnecting: Boolean) {
+    if (!isConnecting) return
+    val infiniteTransition = rememberInfiniteTransition(label = "hero_spin")
+    val spinnerRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "hero_spin_rot"
+    )
+    Box(
+        modifier = Modifier
+            .size(108.dp)
+            .graphicsLayer { rotationZ = spinnerRotation }
+            .clip(CircleShape)
+            .border(
+                2.5.dp,
+                Brush.sweepGradient(listOf(Color.Transparent, Color.White, Color.Transparent)),
+                CircleShape
+            )
+    )
 }
+

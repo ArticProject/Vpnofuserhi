@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -19,6 +20,7 @@ fun MeshNetworkBackground(
     isDarkTheme: Boolean = false,
     isConnected: Boolean = false
 ) {
+    // Base celestial constellation points matching screenshot layout
     val baseNodes = remember {
         listOf(
             BaseNode(0.46f, 0.05f),
@@ -43,6 +45,7 @@ fun MeshNetworkBackground(
         )
     }
 
+    // Constellation lines linking neighbouring points
     val edges = remember {
         listOf(
             Pair(0, 1), Pair(1, 2), Pair(1, 3), Pair(0, 4), Pair(3, 4),
@@ -77,6 +80,7 @@ fun MeshNetworkBackground(
                 Offset(node.baseX * w, node.baseY * h)
             }
 
+            // Render constellation lines
             for (edge in edges) {
                 if (edge.first in points.indices && edge.second in points.indices) {
                     drawLine(
@@ -89,6 +93,7 @@ fun MeshNetworkBackground(
                 }
             }
 
+            // Render constellation nodes with glowing halo
             for (pt in points) {
                 drawCircle(
                     color = dotColor.copy(alpha = dotColor.alpha * 0.35f),
@@ -104,3 +109,4 @@ fun MeshNetworkBackground(
         }
     }
 }
+

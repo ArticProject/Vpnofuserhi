@@ -2,8 +2,13 @@ package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -34,6 +39,7 @@ fun VellorApp(
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
 
+    // If onboarding is not completed yet, show the initial interactive cards flow
     if (!isOnboardingCompleted) {
         OnboardingScreen(
             isDarkTheme = isDarkTheme,
@@ -85,6 +91,7 @@ fun VellorApp(
             .fillMaxSize()
             .background(if (isDarkTheme) Color(0xFF09090B) else Color.White)
     ) {
+        // Living animated floating constellation/astral mesh on background with high visibility
         MeshNetworkBackground(
             modifier = Modifier.fillMaxSize(),
             isDarkTheme = isDarkTheme,
@@ -99,8 +106,25 @@ fun VellorApp(
         ) {
             AnimatedContent(
                 targetState = currentTab,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "tab_switch"
+                transitionSpec = {
+                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (slideInHorizontally(
+                        animationSpec = spring(dampingRatio = 0.85f, stiffness = 450f),
+                        initialOffsetX = { fullWidth -> direction * (fullWidth / 4) }
+                    ) + fadeIn(spring(stiffness = 450f)) + scaleIn(
+                        initialScale = 0.96f,
+                        animationSpec = spring(dampingRatio = 0.85f, stiffness = 450f)
+                    )).togetherWith(
+                        slideOutHorizontally(
+                            animationSpec = spring(dampingRatio = 0.85f, stiffness = 450f),
+                            targetOffsetX = { fullWidth -> -direction * (fullWidth / 4) }
+                        ) + fadeOut(spring(stiffness = 450f)) + scaleOut(
+                            targetScale = 0.96f,
+                            animationSpec = spring(dampingRatio = 0.85f, stiffness = 450f)
+                        )
+                    )
+                },
+                label = "tab_switch_transition"
             ) { tab ->
                 when (tab) {
                     AppTab.TUNNEL -> {
@@ -118,7 +142,9 @@ fun VellorApp(
                             currentLanguage = selectedLanguage,
                             onSelectLanguage = { viewModel.setLanguage(it) },
                             onToggleConnect = { viewModel.toggleConnect() },
-                            onSelectServer = { server -> viewModel.selectServer(server) },
+                            onSelectServer = { server ->
+                                viewModel.selectServer(server)
+                            },
                             onOpenServerPicker = { currentTab = AppTab.NODES },
                             onInspectServer = { server -> viewModel.inspectServer(server) },
                             onResetOnboarding = { viewModel.resetOnboarding() }
@@ -135,7 +161,9 @@ fun VellorApp(
                                 viewModel.selectServer(server)
                                 currentTab = AppTab.TUNNEL
                             },
-                            onToggleFavorite = { serverId -> viewModel.toggleFavorite(serverId) },
+                            onToggleFavorite = { serverId ->
+                                viewModel.toggleFavorite(serverId)
+                            },
                             onBack = { currentTab = AppTab.TUNNEL }
                         )
                     }
@@ -209,7 +237,8 @@ fun VellorApp(
                         currentTab = AppTab.PROFILE
                     },
                     activationError = activationError,
-                    isDarkTheme = isDarkTheme
+                    isDarkTheme = isDarkTheme,
+                    currentLanguage = selectedLanguage
                 )
             }
         }

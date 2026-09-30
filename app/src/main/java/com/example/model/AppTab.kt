@@ -1,8 +1,8 @@
 package com.example.model
 
-enum class AppTab {
-    TUNNEL,
-    NODES,
-    SHIELD,
-    PROFILE
+enum class AppTab(val title: String) {
+    TUNNEL("Tunnel"),
+    NODES("Nodes"),
+    SHIELD("Shield"),
+    PROFILE("Profile")
 }

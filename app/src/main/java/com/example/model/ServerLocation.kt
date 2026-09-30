@@ -10,14 +10,15 @@ data class ServerLocation(
     val pingMs: Int,
     val loadPercent: Int,
     val ipAddress: String,
-    val vlessUrl: String = "",
     val photoUrl: String = "",
-    val isLiveServer: Boolean = true,
+    val vlessUrl: String = "",
+    val isLiveServer: Boolean = false,
     val isP2p: Boolean = true,
     val isStreaming: Boolean = true,
-    val isStealth: Boolean = true,
+    val isStealth: Boolean = false,
+    val isDoubleVpn: Boolean = false,
     val isFavorite: Boolean = false
 ) {
     val fullName: String
-        get() = "$country ($city)"
+        get() = "$country, $city"
 }
