@@ -1,165 +1,146 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.outlined.FilterNone
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.model.AppLanguage
 import com.example.model.AppTab
-import com.example.ui.theme.VellorEmerald
 
-/**
- * iOS Safari Bottom Navigation Bar matching the bottom of Screenshot 1 and 2:
- * - Address search capsule: "vellorshoping.com" / "vellorvpn.com" with lock & reload
- * - System bar: Back, Forward, Share, Bookmarks (Nodes), Tabs (Logs)
- */
 @Composable
 fun VellorSafariBar(
     currentTab: AppTab,
-    isConnected: Boolean,
     onTabSelected: (AppTab) -> Unit,
+    isDarkTheme: Boolean = true,
+    currentLanguage: AppLanguage = AppLanguage.SYSTEM,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    val isRu = currentLanguage == AppLanguage.RUSSIAN
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFFF9F9FB).copy(alpha = 0.98f))
-            .border(
-                width = 0.8.dp,
-                color = Color(0xFFE5E5EA)
-            )
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .testTag("vellor_safari_bottom_bar")
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // Address Capsule Pill (matching "vellorshoping.com" in screenshots!)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFEBEBEF))
-                .clickable { onTabSelected(AppTab.TUNNEL) }
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left: Lock icon
-                Icon(
-                    imageVector = Icons.Filled.Lock,
-                    contentDescription = "Encrypted SSL",
-                    tint = Color(0xFF09090B),
-                    modifier = Modifier.size(14.dp)
-                )
-
-                // Center: URL domain
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (isConnected) "secure.vellorvpn.com" else "vellorvpn.com",
-                        color = Color(0xFF09090B),
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 13.sp
-                    )
-                }
-
-                // Right: Reload icon
-                Icon(
-                    imageVector = Icons.Filled.Refresh,
-                    contentDescription = "Refresh",
-                    tint = Color(0xFF71717A),
-                    modifier = Modifier.size(15.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // iOS Navigation Toolbar: Back, Forward, Shield, Nodes, Tabs
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .clip(RoundedCornerShape(32.dp))
+                .background(if (isDarkTheme) Color(0xFF141416) else Color.White)
+                .border(
+                    width = 1.dp,
+                    color = if (isDarkTheme) Color(0xFF27272A) else Color(0xFFE4E4E7),
+                    shape = RoundedCornerShape(32.dp)
+                )
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = { onTabSelected(AppTab.TUNNEL) },
-                modifier = Modifier.testTag("safari_nav_tunnel")
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBackIos,
-                    contentDescription = "Tunnel Home",
-                    tint = if (currentTab == AppTab.TUNNEL) Color(0xFF007AFF) else Color(0xFF71717A),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            SafariTabItem(
+                title = if (isRu) "Туннель" else "Tunnel",
+                icon = Icons.Default.VpnKey,
+                isSelected = currentTab == AppTab.TUNNEL,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(AppTab.TUNNEL) }
+            )
+            SafariTabItem(
+                title = if (isRu) "Ноды" else "Nodes",
+                icon = Icons.Default.Dns,
+                isSelected = currentTab == AppTab.NODES,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(AppTab.NODES) }
+            )
+            SafariTabItem(
+                title = if (isRu) "Защита" else "Shield",
+                icon = Icons.Default.Security,
+                isSelected = currentTab == AppTab.SHIELD,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(AppTab.SHIELD) }
+            )
+            SafariTabItem(
+                title = if (isRu) "Профиль" else "Profile",
+                icon = Icons.Default.Person,
+                isSelected = currentTab == AppTab.PROFILE,
+                isDarkTheme = isDarkTheme,
+                onClick = { onTabSelected(AppTab.PROFILE) }
+            )
+        }
+    }
+}
 
-            IconButton(
-                onClick = { onTabSelected(AppTab.NODES) },
-                modifier = Modifier.testTag("safari_nav_nodes")
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Dns,
-                    contentDescription = "Nodes Catalog",
-                    tint = if (currentTab == AppTab.NODES) Color(0xFF007AFF) else Color(0xFF71717A),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+@Composable
+private fun SafariTabItem(
+    title: String,
+    icon: ImageVector,
+    isSelected: Boolean,
+    isDarkTheme: Boolean,
+    onClick: () -> Unit
+) {
+    val bgColor = if (isSelected) {
+        if (isDarkTheme) Color.White else Color.Black
+    } else {
+        Color.Transparent
+    }
 
-            IconButton(
-                onClick = { onTabSelected(AppTab.SHIELD) },
-                modifier = Modifier.testTag("safari_nav_shield")
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Shield,
-                    contentDescription = "Security Protocols",
-                    tint = if (currentTab == AppTab.SHIELD) Color(0xFF007AFF) else Color(0xFF71717A),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+    val contentColor = if (isSelected) {
+        if (isDarkTheme) Color.Black else Color.White
+    } else {
+        Color(0xFFA1A1AA)
+    }
 
-            IconButton(
-                onClick = { onTabSelected(AppTab.LOGS) },
-                modifier = Modifier.testTag("safari_nav_logs")
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.FilterNone,
-                    contentDescription = "Activity Tabs",
-                    tint = if (currentTab == AppTab.LOGS) Color(0xFF007AFF) else Color(0xFF71717A),
-                    modifier = Modifier.size(18.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(bgColor)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = contentColor,
+                modifier = Modifier.height(18.dp)
+            )
+            if (isSelected) {
+                Text(
+                    text = title,
+                    color = contentColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

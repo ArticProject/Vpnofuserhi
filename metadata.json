@@ -1,5 +1,5 @@
 {
-  "name": "Vellor VPN",
+  "name": "Vellor",
   "description": "Minimalist, luxury iOS-styled VPN with ultra-clean aesthetic, dynamic network mesh, and secure tunnel controls.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

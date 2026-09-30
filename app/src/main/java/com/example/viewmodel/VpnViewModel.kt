@@ -5,10 +5,12 @@ import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.VpnDatabase
 import com.example.data.VpnRepository
+import com.example.model.AppLanguage
 import com.example.model.ServerLocation
 import com.example.model.VpnProtocol
 import com.example.model.VpnSession
@@ -20,7 +22,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
@@ -34,285 +35,314 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val servers: StateFlow<List<ServerLocation>> = repository.servers
-    val sessions: StateFlow<List<VpnSession>> = repository.allSessions.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+
+    val sessions: StateFlow<List<VpnSession>> = repository.sessions
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _vpnState = MutableStateFlow(VpnState.DISCONNECTED)
-    val vpnState = _vpnState.asStateFlow()
+    val vpnState: StateFlow<VpnState> = _vpnState.asStateFlow()
 
     private val _selectedServer = MutableStateFlow(
         ServerLocation(
-            id = "ch_zrh_01",
-            country = "Switzerland",
-            city = "Zurich",
-            countryCode = "CH",
-            cityCode = "ZRH",
-            photoUrl = "https://images.unsplash.com/photo-1515488764276-beab7607c1e6?auto=format&fit=crop&w=800&q=80",
-            pingMs = 12,
-            loadPercent = 28,
-            ipAddress = "185.220.101.42",
+            id = "srv_h1_de",
+            country = "Germany",
+            countryCode = "DE",
+            city = "Frankfurt",
+            cityCode = "FRA",
+            flagEmoji = "🇩🇪",
+            pingMs = 24,
+            loadPercent = 12,
+            ipAddress = "179.254.127.97",
+            vlessUrl = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@de1.h1cloud.net:25562?type=tcp&security=reality&sni=www.samsung.com&fp=chrome&pbk=IaWM7egEriDsIBixWjUN1i5FWBpOhVfVRBa2edgR9HI&sid=3758385544d9dc53&spx=%2F&encryption=none#Vellor%20DE%20-%20H1Cloud",
+            isLiveServer = true,
             isP2p = true,
             isStreaming = true,
-            isDoubleVpn = true,
             isStealth = true,
             isFavorite = true
         )
     )
-    val selectedServer = _selectedServer.asStateFlow()
+    val selectedServer: StateFlow<ServerLocation> = _selectedServer.asStateFlow()
 
-    private val _protocol = MutableStateFlow(VpnProtocol.WIREGUARD)
-    val protocol = _protocol.asStateFlow()
-
-    private val _downloadSpeedMb = MutableStateFlow(0f)
-    val downloadSpeedMb = _downloadSpeedMb.asStateFlow()
-
-    private val _uploadSpeedMb = MutableStateFlow(0f)
-    val uploadSpeedMb = _uploadSpeedMb.asStateFlow()
-
-    private val _speedHistory = MutableStateFlow(List(14) { 0f })
-    val speedHistory = _speedHistory.asStateFlow()
-
-    private val _durationSeconds = MutableStateFlow(0L)
-    val durationSeconds = _durationSeconds.asStateFlow()
-
-    private val _pingMs = MutableStateFlow(12)
-    val pingMs = _pingMs.asStateFlow()
-
-    private val _killSwitch = MutableStateFlow(true)
-    val killSwitch = _killSwitch.asStateFlow()
-
-    private val _stealth = MutableStateFlow(false)
-    val stealth = _stealth.asStateFlow()
-
-    private val _doubleHop = MutableStateFlow(false)
-    val doubleHop = _doubleHop.asStateFlow()
-
-    private val _adBlock = MutableStateFlow(true)
-    val adBlock = _adBlock.asStateFlow()
-
-    private val _isDarkTheme = MutableStateFlow(false)
-    val isDarkTheme = _isDarkTheme.asStateFlow()
+    private val _protocol = MutableStateFlow(VpnProtocol.VLESS_REALITY)
+    val protocol: StateFlow<VpnProtocol> = _protocol.asStateFlow()
 
     private val _inspectingServer = MutableStateFlow<ServerLocation?>(null)
-    val inspectingServer = _inspectingServer.asStateFlow()
+    val inspectingServer: StateFlow<ServerLocation?> = _inspectingServer.asStateFlow()
 
-    private var connectionStartTime: Long = 0L
-    private var telemetryJob: Job? = null
+    private val _downloadSpeedMb = MutableStateFlow(0f)
+    val downloadSpeedMb: StateFlow<Float> = _downloadSpeedMb.asStateFlow()
+
+    private val _uploadSpeedMb = MutableStateFlow(0f)
+    val uploadSpeedMb: StateFlow<Float> = _uploadSpeedMb.asStateFlow()
+
+    private val _durationSeconds = MutableStateFlow(0L)
+    val durationSeconds: StateFlow<Long> = _durationSeconds.asStateFlow()
+
+    private val _pingMs = MutableStateFlow(24)
+    val pingMs: StateFlow<Int> = _pingMs.asStateFlow()
+
+    // Security Toggles
+    private val _killSwitch = MutableStateFlow(true)
+    val killSwitch: StateFlow<Boolean> = _killSwitch.asStateFlow()
+
+    private val _stealth = MutableStateFlow(true)
+    val stealth: StateFlow<Boolean> = _stealth.asStateFlow()
+
+    private val _doubleHop = MutableStateFlow(false)
+    val doubleHop: StateFlow<Boolean> = _doubleHop.asStateFlow()
+
+    private val _adBlock = MutableStateFlow(true)
+    val adBlock: StateFlow<Boolean> = _adBlock.asStateFlow()
+
+    private val prefs = application.getSharedPreferences("vellor_prefs", Context.MODE_PRIVATE)
+
+    private val _isOnboardingCompleted = MutableStateFlow(true)
+    val isOnboardingCompleted: StateFlow<Boolean> = _isOnboardingCompleted.asStateFlow()
+
+    private val _isDarkTheme = MutableStateFlow(
+        prefs.getBoolean("dark_theme", true)
+    )
+    val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
+
+    private val _selectedLanguage = MutableStateFlow(
+        try {
+            AppLanguage.valueOf(
+                prefs.getString("selected_language", AppLanguage.RUSSIAN.name) ?: AppLanguage.RUSSIAN.name
+            )
+        } catch (_: Exception) {
+            AppLanguage.RUSSIAN
+        }
+    )
+    val selectedLanguage: StateFlow<AppLanguage> = _selectedLanguage.asStateFlow()
+
+    private val _username = MutableStateFlow(
+        prefs.getString("user_username", "Sovereign Operator") ?: "Sovereign Operator"
+    )
+    val username: StateFlow<String> = _username.asStateFlow()
+
+    private val _userEmail = MutableStateFlow(
+        prefs.getString("user_email", "operator@vellor.network") ?: "operator@vellor.network"
+    )
+    val userEmail: StateFlow<String> = _userEmail.asStateFlow()
+
+    private val _sovereignId = MutableStateFlow(
+        prefs.getString("sovereign_id", "VLR-8821-VIP") ?: "VLR-8821-VIP"
+    )
+    val sovereignId: StateFlow<String> = _sovereignId.asStateFlow()
+
+    private val _isRegistered = MutableStateFlow(true)
+    val isRegistered: StateFlow<Boolean> = _isRegistered.asStateFlow()
+
+    private val _isActivated = MutableStateFlow(true)
+    val isActivated: StateFlow<Boolean> = _isActivated.asStateFlow()
+
+    private val _activatedKey = MutableStateFlow(
+        prefs.getString("activated_key", "H1CLOUD-2026") ?: "H1CLOUD-2026"
+    )
+    val activatedKey: StateFlow<String> = _activatedKey.asStateFlow()
+
+    private val _showActivationDialog = MutableStateFlow(false)
+    val showActivationDialog: StateFlow<Boolean> = _showActivationDialog.asStateFlow()
+
+    private val _activationError = MutableStateFlow<String?>(null)
+    val activationError: StateFlow<String?> = _activationError.asStateFlow()
+
     private var timerJob: Job? = null
+    private var telemetryJob: Job? = null
+    private var connectionStartTime: Long = 0L
 
-    private var totalBytesDownloadedSession: Long = 0L
-    private var totalBytesUploadedSession: Long = 0L
+    val formattedDuration: String
+        get() {
+            val totalSec = _durationSeconds.value
+            val m = totalSec / 60
+            val s = totalSec % 60
+            val h = m / 60
+            return if (h > 0) {
+                "%02d:%02d:%02d".format(h, m % 60, s)
+            } else {
+                "%02d:%02d".format(m, s)
+            }
+        }
 
-    fun toggleDarkTheme() {
-        _isDarkTheme.value = !_isDarkTheme.value
+    fun toggleConnect() {
+        when (_vpnState.value) {
+            VpnState.DISCONNECTED -> {
+                viewModelScope.launch {
+                    _vpnState.value = VpnState.CONNECTING
+                    vibrate(40)
+                    delay(600) // Fast smooth responsive transition
+                    _vpnState.value = VpnState.CONNECTED
+                    vibrate(70)
+                    connectionStartTime = System.currentTimeMillis()
+                    startTelemetry()
+                }
+            }
+            VpnState.CONNECTED, VpnState.CONNECTING -> {
+                viewModelScope.launch {
+                    _vpnState.value = VpnState.DISCONNECTING
+                    vibrate(30)
+                    stopTelemetry()
+                    delay(300)
+                    _vpnState.value = VpnState.DISCONNECTED
+                }
+            }
+            VpnState.DISCONNECTING -> {}
+        }
+    }
+
+    private fun startTelemetry() {
+        timerJob?.cancel()
+        _durationSeconds.value = 0L
+        timerJob = viewModelScope.launch {
+            while (_vpnState.value == VpnState.CONNECTED) {
+                delay(1000)
+                _durationSeconds.value += 1
+            }
+        }
+
+        telemetryJob?.cancel()
+        telemetryJob = viewModelScope.launch {
+            while (_vpnState.value == VpnState.CONNECTED) {
+                val baseDown = 62f + Random.nextFloat() * 18f
+                val baseUp = 18f + Random.nextFloat() * 8f
+                _downloadSpeedMb.value = baseDown
+                _uploadSpeedMb.value = baseUp
+                _pingMs.value = _selectedServer.value.pingMs + Random.nextInt(-2, 3)
+                delay(1500)
+            }
+        }
+    }
+
+    private fun stopTelemetry() {
+        val duration = _durationSeconds.value
+        val server = _selectedServer.value
+        val proto = _protocol.value
+
+        if (duration > 2) {
+            viewModelScope.launch {
+                try {
+                    repository.saveSession(
+                        VpnSession(
+                            serverName = server.fullName,
+                            country = server.country,
+                            city = server.city,
+                            flagEmoji = server.flagEmoji,
+                            protocol = proto.displayName,
+                            startTimeMillis = connectionStartTime,
+                            durationSeconds = duration,
+                            bytesDownloaded = (duration * 45L * 1024L * 1024L),
+                            bytesUploaded = (duration * 12L * 1024L * 1024L)
+                        )
+                    )
+                } catch (_: Exception) {}
+            }
+        }
+
+        timerJob?.cancel()
+        timerJob = null
+        telemetryJob?.cancel()
+        telemetryJob = null
+        _downloadSpeedMb.value = 0f
+        _uploadSpeedMb.value = 0f
     }
 
     fun selectServer(server: ServerLocation) {
         _selectedServer.value = server
         _pingMs.value = server.pingMs
-        if (_vpnState.value == VpnState.CONNECTED) {
-            // Reconnect to new node
-            reconnectTo(server)
-        }
     }
 
-    fun setProtocol(proto: VpnProtocol) {
-        _protocol.value = proto
-    }
-
-    fun toggleFavorite(serverId: String) {
-        repository.toggleFavorite(serverId)
+    fun setProtocol(protocol: VpnProtocol) {
+        _protocol.value = protocol
     }
 
     fun inspectServer(server: ServerLocation?) {
         _inspectingServer.value = server
     }
 
-    fun toggleKillSwitch(enabled: Boolean) { _killSwitch.value = enabled }
-    fun toggleStealth(enabled: Boolean) { _stealth.value = enabled }
-    fun toggleDoubleHop(enabled: Boolean) { _doubleHop.value = enabled }
-    fun toggleAdBlock(enabled: Boolean) { _adBlock.value = enabled }
-
-    fun toggleConnect() {
-        when (_vpnState.value) {
-            VpnState.DISCONNECTED -> startConnect()
-            VpnState.CONNECTED -> startDisconnect()
-            VpnState.CONNECTING, VpnState.DISCONNECTING -> { /* no-op during transition */ }
-        }
+    fun toggleFavorite(serverId: String) {
+        repository.toggleFavorite(serverId)
     }
 
-    fun autoConnectFastest() {
-        val fastest = servers.value.minByOrNull { it.pingMs } ?: return
-        selectServer(fastest)
-        if (_vpnState.value != VpnState.CONNECTED) {
-            startConnect()
-        }
+    fun toggleKillSwitch() {
+        _killSwitch.value = !_killSwitch.value
     }
 
-    private fun startConnect() {
-        vibrate(40)
-        _vpnState.value = VpnState.CONNECTING
-
-        viewModelScope.launch {
-            delay(1100) // Realistic cryptographic key exchange & handshake
-            _vpnState.value = VpnState.CONNECTED
-            vibratePattern(longArrayOf(0, 35, 60, 45))
-            connectionStartTime = System.currentTimeMillis()
-            _durationSeconds.value = 0L
-            totalBytesDownloadedSession = 0L
-            totalBytesUploadedSession = 0L
-
-            startTelemetry()
-        }
+    fun toggleStealth() {
+        _stealth.value = !_stealth.value
     }
 
-    private fun startDisconnect() {
-        vibrate(30)
-        _vpnState.value = VpnState.DISCONNECTING
-        stopTelemetry()
-
-        viewModelScope.launch {
-            delay(600)
-            _vpnState.value = VpnState.DISCONNECTED
-            vibrate(50)
-
-            // Save completed session to Room DB
-            val sessionDuration = _durationSeconds.value
-            if (sessionDuration > 1) {
-                val current = _selectedServer.value
-                val session = VpnSession(
-                    serverName = current.fullName,
-                    city = current.city,
-                    country = current.country,
-                    flagEmoji = current.flagEmoji,
-                    startTimeMillis = connectionStartTime,
-                    durationSeconds = sessionDuration,
-                    bytesDownloaded = totalBytesDownloadedSession.coerceAtLeast(1024 * 1024 * 4),
-                    bytesUploaded = totalBytesUploadedSession.coerceAtLeast(1024 * 512),
-                    protocol = _protocol.value.displayName
-                )
-                repository.saveSession(session)
-            }
-
-            _downloadSpeedMb.value = 0f
-            _uploadSpeedMb.value = 0f
-            _durationSeconds.value = 0L
-            _speedHistory.value = List(14) { 0f }
-        }
+    fun toggleDoubleHop() {
+        _doubleHop.value = !_doubleHop.value
     }
 
-    private fun reconnectTo(server: ServerLocation) {
-        viewModelScope.launch {
-            _vpnState.value = VpnState.CONNECTING
-            stopTelemetry()
-            delay(900)
-            _selectedServer.value = server
-            _vpnState.value = VpnState.CONNECTED
-            vibrate(40)
-            startTelemetry()
-        }
+    fun toggleAdBlock() {
+        _adBlock.value = !_adBlock.value
     }
 
-    private fun startTelemetry() {
-        stopTelemetry()
-
-        // Duration timer
-        timerJob = viewModelScope.launch {
-            while (isActive) {
-                delay(1000)
-                _durationSeconds.value += 1
-            }
-        }
-
-        // Live speed & ping generator
-        telemetryJob = viewModelScope.launch {
-            val random = Random(System.currentTimeMillis())
-            var baseDown = 34.0f + random.nextFloat() * 18.0f
-            var baseUp = 8.5f + random.nextFloat() * 6.0f
-
-            while (isActive) {
-                val jitter = (random.nextFloat() - 0.48f) * 6.0f
-                val down = (baseDown + jitter).coerceIn(18.0f, 95.0f)
-                val up = (baseUp + jitter * 0.3f).coerceIn(3.0f, 28.0f)
-
-                _downloadSpeedMb.value = down
-                _uploadSpeedMb.value = up
-
-                // Accumulate bytes
-                totalBytesDownloadedSession += (down * 1024 * 1024 / 2).toLong()
-                totalBytesUploadedSession += (up * 1024 * 1024 / 2).toLong()
-
-                // Update sparkline
-                val currentHist = _speedHistory.value.toMutableList()
-                if (currentHist.size >= 14) currentHist.removeAt(0)
-                currentHist.add(down)
-                _speedHistory.value = currentHist
-
-                // Jittered ping
-                val basePing = _selectedServer.value.pingMs
-                val pingJitter = random.nextInt(-2, 3)
-                _pingMs.value = (basePing + pingJitter).coerceAtLeast(6)
-
-                delay(800)
-            }
-        }
+    fun setDarkTheme(enabled: Boolean) {
+        _isDarkTheme.value = enabled
+        prefs.edit().putBoolean("dark_theme", enabled).apply()
     }
 
-    private fun stopTelemetry() {
-        timerJob?.cancel()
-        timerJob = null
-        telemetryJob?.cancel()
-        telemetryJob = null
+    fun setLanguage(language: AppLanguage) {
+        _selectedLanguage.value = language
+        prefs.edit().putString("selected_language", language.name).apply()
+    }
+
+    fun completeOnboarding() {
+        _isOnboardingCompleted.value = true
+    }
+
+    fun resetOnboarding() {
+        _isOnboardingCompleted.value = false
+    }
+
+    fun activateKey(key: String) {
+        _isActivated.value = true
+        _activatedKey.value = key.trim().uppercase()
+        prefs.edit().putString("activated_key", key.trim().uppercase()).apply()
+        _activationError.value = null
+        _showActivationDialog.value = false
+    }
+
+    fun deactivateKey() {
+        _isActivated.value = false
+    }
+
+    fun dismissActivationDialog() {
+        _showActivationDialog.value = false
+    }
+
+    fun registerUser(name: String, email: String) {
+        _username.value = name
+        _userEmail.value = email
+        prefs.edit().putString("user_username", name).putString("user_email", email).apply()
     }
 
     fun clearHistory() {
         viewModelScope.launch {
-            repository.clearHistory()
+            try {
+                repository.clearHistory()
+            } catch (_: Exception) {}
         }
     }
 
-    val formattedDuration: String
-        get() {
-            val secs = _durationSeconds.value
-            val hours = secs / 3600
-            val minutes = (secs % 3600) / 60
-            val seconds = secs % 60
-            return if (hours > 0) {
-                String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    private fun vibrate(durationMs: Long) {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = getApplication<Application>().getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vm?.defaultVibrator
             } else {
-                String.format("%02d:%02d", minutes, seconds)
+                @Suppress("DEPRECATION")
+                getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             }
-        }
-
-    private fun vibrate(durationMillis: Long) {
-        try {
-            val vibrator = getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            if (vibrator != null && vibrator.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createOneShot(durationMillis, VibrationEffect.DEFAULT_AMPLITUDE))
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator.vibrate(durationMillis)
-                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(durationMs)
             }
-        } catch (_: Exception) {}
-    }
-
-    private fun vibratePattern(pattern: LongArray) {
-        try {
-            val vibrator = getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            if (vibrator != null && vibrator.hasVibrator()) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator.vibrate(pattern, -1)
-                }
-            }
-        } catch (_: Exception) {}
+        } catch (_: Throwable) {}
     }
 
     override fun onCleared() {

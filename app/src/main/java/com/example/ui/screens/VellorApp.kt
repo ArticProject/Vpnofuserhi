@@ -8,8 +8,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +30,22 @@ fun VellorApp(
     viewModel: VpnViewModel,
     modifier: Modifier = Modifier
 ) {
+    val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsStateWithLifecycle()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
+    val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+
+    if (!isOnboardingCompleted) {
+        OnboardingScreen(
+            isDarkTheme = isDarkTheme,
+            onToggleDarkTheme = { viewModel.setDarkTheme(it) },
+            currentLanguage = selectedLanguage,
+            onSelectLanguage = { viewModel.setLanguage(it) },
+            onFinishOnboarding = { viewModel.completeOnboarding() },
+            modifier = modifier
+        )
+        return
+    }
+
     var currentTab by remember { mutableStateOf(AppTab.TUNNEL) }
 
     val vpnState by viewModel.vpnState.collectAsStateWithLifecycle()
@@ -40,7 +56,6 @@ fun VellorApp(
 
     val downloadSpeed by viewModel.downloadSpeedMb.collectAsStateWithLifecycle()
     val uploadSpeed by viewModel.uploadSpeedMb.collectAsStateWithLifecycle()
-    val speedHistory by viewModel.speedHistory.collectAsStateWithLifecycle()
     val durationSec by viewModel.durationSeconds.collectAsStateWithLifecycle()
     val pingMs by viewModel.pingMs.collectAsStateWithLifecycle()
 
@@ -50,7 +65,15 @@ fun VellorApp(
     val adBlock by viewModel.adBlock.collectAsStateWithLifecycle()
     val inspectingServer by viewModel.inspectingServer.collectAsStateWithLifecycle()
 
-    // Handle Back button to return to Main Feed
+    val username by viewModel.username.collectAsStateWithLifecycle()
+    val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
+    val sovereignId by viewModel.sovereignId.collectAsStateWithLifecycle()
+    val isRegistered by viewModel.isRegistered.collectAsStateWithLifecycle()
+    val isActivated by viewModel.isActivated.collectAsStateWithLifecycle()
+    val activatedKey by viewModel.activatedKey.collectAsStateWithLifecycle()
+    val showActivationDialog by viewModel.showActivationDialog.collectAsStateWithLifecycle()
+    val activationError by viewModel.activationError.collectAsStateWithLifecycle()
+
     if (currentTab != AppTab.TUNNEL) {
         BackHandler {
             currentTab = AppTab.TUNNEL
@@ -60,24 +83,24 @@ fun VellorApp(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(if (isDarkTheme) Color(0xFF09090B) else Color.White)
     ) {
-        // Delicate geometric constellation wireframe on pure white (matching Screenshots 1 & 2)
         MeshNetworkBackground(
             modifier = Modifier.fillMaxSize(),
+            isDarkTheme = isDarkTheme,
             isConnected = vpnState == VpnState.CONNECTED
         )
 
-        // Screen Content with status bar insets
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .navigationBarsPadding()
         ) {
             AnimatedContent(
                 targetState = currentTab,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "tab_switch_transition"
+                label = "tab_switch"
             ) { tab ->
                 when (tab) {
                     AppTab.TUNNEL -> {
@@ -90,69 +113,105 @@ fun VellorApp(
                             uploadSpeedMb = uploadSpeed,
                             durationFormatted = viewModel.formattedDuration,
                             pingMs = pingMs,
+                            isDarkTheme = isDarkTheme,
+                            onToggleDarkTheme = { viewModel.setDarkTheme(it) },
+                            currentLanguage = selectedLanguage,
+                            onSelectLanguage = { viewModel.setLanguage(it) },
                             onToggleConnect = { viewModel.toggleConnect() },
-                            onSelectServer = { server ->
-                                viewModel.selectServer(server)
-                            },
+                            onSelectServer = { server -> viewModel.selectServer(server) },
                             onOpenServerPicker = { currentTab = AppTab.NODES },
                             onInspectServer = { server -> viewModel.inspectServer(server) },
-                            onMenuClick = { currentTab = AppTab.SHIELD }
+                            onResetOnboarding = { viewModel.resetOnboarding() }
                         )
                     }
-
                     AppTab.NODES -> {
                         LocationsScreen(
                             servers = servers,
                             selectedServer = selectedServer,
+                            isConnected = vpnState == VpnState.CONNECTED,
+                            isDarkTheme = isDarkTheme,
+                            currentLanguage = selectedLanguage,
                             onSelectServer = { server ->
                                 viewModel.selectServer(server)
                                 currentTab = AppTab.TUNNEL
                             },
-                            onToggleFavorite = { id -> viewModel.toggleFavorite(id) },
-                            onInspectServer = { server -> viewModel.inspectServer(server) }
+                            onToggleFavorite = { serverId -> viewModel.toggleFavorite(serverId) },
+                            onBack = { currentTab = AppTab.TUNNEL }
                         )
                     }
-
                     AppTab.SHIELD -> {
                         SecurityScreen(
                             currentProtocol = protocol,
-                            onProtocolSelected = { viewModel.setProtocol(it) },
-                            killSwitchEnabled = killSwitch,
-                            onToggleKillSwitch = { viewModel.toggleKillSwitch(it) },
-                            stealthEnabled = stealth,
-                            onToggleStealth = { viewModel.toggleStealth(it) },
-                            doubleHopEnabled = doubleHop,
-                            onToggleDoubleHop = { viewModel.toggleDoubleHop(it) },
-                            adBlockEnabled = adBlock,
-                            onToggleAdBlock = { viewModel.toggleAdBlock(it) }
+                            killSwitch = killSwitch,
+                            stealth = stealth,
+                            doubleHop = doubleHop,
+                            adBlock = adBlock,
+                            onSelectProtocol = { proto -> viewModel.setProtocol(proto) },
+                            onToggleKillSwitch = { viewModel.toggleKillSwitch() },
+                            onToggleStealth = { viewModel.toggleStealth() },
+                            onToggleDoubleHop = { viewModel.toggleDoubleHop() },
+                            onToggleAdBlock = { viewModel.toggleAdBlock() },
+                            isDarkTheme = isDarkTheme,
+                            currentLanguage = selectedLanguage
                         )
                     }
-
-                    AppTab.LOGS -> {
-                        ActivityScreen(
+                    AppTab.PROFILE -> {
+                        ProfileScreen(
+                            username = username,
+                            userEmail = userEmail,
+                            sovereignId = sovereignId,
+                            isRegistered = isRegistered,
+                            isActivated = isActivated,
+                            activatedKey = activatedKey,
+                            activationError = activationError,
                             sessions = sessions,
-                            onClearHistory = { viewModel.clearHistory() }
+                            onActivateKey = { key -> viewModel.activateKey(key) },
+                            onDeactivateKey = { viewModel.deactivateKey() },
+                            onRegisterUser = { name, email -> viewModel.registerUser(name, email) },
+                            onClearHistory = { viewModel.clearHistory() },
+                            isDarkTheme = isDarkTheme,
+                            currentLanguage = selectedLanguage
                         )
                     }
                 }
             }
-        }
 
-        // iOS Safari Bottom Navigation Bar matching Screenshot 1 & 2!
-        VellorSafariBar(
-            currentTab = currentTab,
-            isConnected = vpnState == VpnState.CONNECTED,
-            onTabSelected = { currentTab = it },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-
-        // Inspector Modal Sheet (White luxury card)
-        inspectingServer?.let { server ->
-            ServerInspectorDialog(
-                server = server,
-                protocol = protocol,
-                onDismiss = { viewModel.inspectServer(null) }
+            VellorSafariBar(
+                currentTab = currentTab,
+                onTabSelected = { currentTab = it },
+                isDarkTheme = isDarkTheme,
+                currentLanguage = selectedLanguage,
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
+
+            inspectingServer?.let { server ->
+                ServerInspectorDialog(
+                    server = server,
+                    isConnected = vpnState == VpnState.CONNECTED && server.id == selectedServer.id,
+                    onDismiss = { viewModel.inspectServer(null) },
+                    onConnect = {
+                        viewModel.selectServer(server)
+                        if (vpnState != VpnState.CONNECTED) {
+                            viewModel.toggleConnect()
+                        }
+                    },
+                    isDarkTheme = isDarkTheme,
+                    currentLanguage = selectedLanguage
+                )
+            }
+
+            if (showActivationDialog) {
+                ActivationRequiredDialog(
+                    onDismissRequest = { viewModel.dismissActivationDialog() },
+                    onActivateKey = { key -> viewModel.activateKey(key) },
+                    onNavigateToProfile = {
+                        viewModel.dismissActivationDialog()
+                        currentTab = AppTab.PROFILE
+                    },
+                    activationError = activationError,
+                    isDarkTheme = isDarkTheme
+                )
+            }
         }
     }
 }

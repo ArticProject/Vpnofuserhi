@@ -5,203 +5,139 @@ import com.example.model.VpnSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 
-class VpnRepository(private val sessionDao: VpnSessionDao) {
+class VpnRepository(private val dao: VpnSessionDao) {
 
-    private val initialServers = listOf(
-        ServerLocation(
-            id = "ch_zrh_01",
-            country = "Switzerland",
-            city = "Zurich",
-            countryCode = "CH",
-            cityCode = "ZRH",
-            photoUrl = "https://images.unsplash.com/photo-1515488764276-beab7607c1e6?auto=format&fit=crop&w=800&q=80",
-            pingMs = 12,
-            loadPercent = 28,
-            ipAddress = "185.220.101.42",
-            isP2p = true,
-            isStreaming = true,
-            isDoubleVpn = true,
-            isStealth = true,
-            isFavorite = true
-        ),
-        ServerLocation(
-            id = "is_rkv_01",
-            country = "Iceland",
-            city = "Reykjavik",
-            countryCode = "IS",
-            cityCode = "RKV",
-            photoUrl = "https://images.unsplash.com/photo-1529963183134-61a90db47eaf?auto=format&fit=crop&w=800&q=80",
-            pingMs = 24,
-            loadPercent = 19,
-            ipAddress = "193.182.144.12",
-            isP2p = true,
-            isStreaming = false,
-            isDoubleVpn = true,
-            isStealth = true,
-            isFavorite = true
-        ),
-        ServerLocation(
-            id = "jp_tyo_01",
-            country = "Japan",
-            city = "Tokyo",
-            countryCode = "JP",
-            cityCode = "TYO",
-            photoUrl = "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=800&q=80",
-            pingMs = 45,
-            loadPercent = 42,
-            ipAddress = "133.242.18.99",
-            isP2p = false,
-            isStreaming = true,
-            isDoubleVpn = false,
-            isStealth = true,
-            isFavorite = false
-        ),
-        ServerLocation(
-            id = "nl_ams_01",
-            country = "Netherlands",
-            city = "Amsterdam",
-            countryCode = "NL",
-            cityCode = "AMS",
-            photoUrl = "https://images.unsplash.com/photo-1512470876302-972faa2aa9a4?auto=format&fit=crop&w=800&q=80",
-            pingMs = 18,
-            loadPercent = 35,
-            ipAddress = "94.142.241.11",
-            isP2p = true,
-            isStreaming = true,
-            isDoubleVpn = false,
-            isStealth = false,
-            isFavorite = false
-        ),
-        ServerLocation(
-            id = "de_fra_01",
-            country = "Germany",
-            city = "Frankfurt",
-            countryCode = "DE",
-            cityCode = "FRA",
-            photoUrl = "https://images.unsplash.com/photo-1541432901042-2d8bd64b4a9b?auto=format&fit=crop&w=800&q=80",
-            pingMs = 16,
-            loadPercent = 31,
-            ipAddress = "159.69.198.85",
-            isP2p = true,
-            isStreaming = true,
-            isDoubleVpn = false,
-            isStealth = true,
-            isFavorite = false
-        ),
-        ServerLocation(
-            id = "gb_lon_01",
-            country = "United Kingdom",
-            city = "London",
-            countryCode = "GB",
-            cityCode = "LON",
-            photoUrl = "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80",
-            pingMs = 21,
-            loadPercent = 44,
-            ipAddress = "178.62.24.103",
-            isP2p = false,
-            isStreaming = true,
-            isDoubleVpn = false,
-            isStealth = false,
-            isFavorite = false
-        ),
-        ServerLocation(
-            id = "se_sto_01",
-            country = "Sweden",
-            city = "Stockholm",
-            countryCode = "SE",
-            cityCode = "STO",
-            photoUrl = "https://images.unsplash.com/photo-1509356843151-3e7d96241e11?auto=format&fit=crop&w=800&q=80",
-            pingMs = 26,
-            loadPercent = 22,
-            ipAddress = "185.157.162.5",
-            isP2p = true,
-            isStreaming = true,
-            isDoubleVpn = true,
-            isStealth = false,
-            isFavorite = false
-        ),
-        ServerLocation(
-            id = "sg_sin_01",
-            country = "Singapore",
-            city = "Singapore",
-            countryCode = "SG",
-            cityCode = "SIN",
-            photoUrl = "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=800&q=80",
-            pingMs = 58,
-            loadPercent = 38,
-            ipAddress = "128.199.204.60",
-            isP2p = true,
-            isStreaming = true,
-            isDoubleVpn = false,
-            isStealth = true,
-            isFavorite = false
-        ),
-        ServerLocation(
-            id = "us_nyc_01",
-            country = "United States",
-            city = "New York",
-            countryCode = "US",
-            cityCode = "NYC",
-            photoUrl = "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=800&q=80",
-            pingMs = 74,
-            loadPercent = 52,
-            ipAddress = "198.199.112.44",
-            isP2p = true,
-            isStreaming = true,
-            isDoubleVpn = false,
-            isStealth = false,
-            isFavorite = false
-        ),
-        ServerLocation(
-            id = "ca_tor_01",
-            country = "Canada",
-            city = "Toronto",
-            countryCode = "CA",
-            cityCode = "TOR",
-            photoUrl = "https://images.unsplash.com/photo-1507992781348-310259076fa0?auto=format&fit=crop&w=800&q=80",
-            pingMs = 69,
-            loadPercent = 27,
-            ipAddress = "159.203.41.88",
-            isP2p = true,
-            isStreaming = true,
-            isDoubleVpn = false,
-            isStealth = false,
-            isFavorite = false
-        ),
-        ServerLocation(
-            id = "au_syd_01",
-            country = "Australia",
-            city = "Sydney",
-            countryCode = "AU",
-            cityCode = "SYD",
-            photoUrl = "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=800&q=80",
-            pingMs = 120,
-            loadPercent = 33,
-            ipAddress = "139.180.170.21",
-            isP2p = false,
-            isStreaming = true,
-            isDoubleVpn = false,
-            isStealth = false,
-            isFavorite = false
+    private val _servers = MutableStateFlow(
+        listOf(
+            ServerLocation(
+                id = "srv_h1_de",
+                country = "Germany",
+                countryCode = "DE",
+                city = "Frankfurt",
+                cityCode = "FRA",
+                flagEmoji = "🇩🇪",
+                pingMs = 24,
+                loadPercent = 12,
+                ipAddress = "179.254.127.97",
+                vlessUrl = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@de1.h1cloud.net:25562?type=tcp&security=reality&sni=www.samsung.com&fp=chrome&pbk=IaWM7egEriDsIBixWjUN1i5FWBpOhVfVRBa2edgR9HI&sid=3758385544d9dc53&spx=%2F&encryption=none#Vellor%20DE%20-%20H1Cloud",
+                isLiveServer = true,
+                isP2p = true,
+                isStreaming = true,
+                isStealth = true,
+                isFavorite = true
+            ),
+            ServerLocation(
+                id = "srv_es",
+                country = "Spain",
+                countryCode = "ES",
+                city = "Madrid",
+                cityCode = "MAD",
+                flagEmoji = "🇪🇸",
+                pingMs = 28,
+                loadPercent = 19,
+                ipAddress = "185.196.220.14",
+                vlessUrl = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@es1.h1cloud.net:25558?security=reality&encryption=none&pbk=bls7cc5bJGz20-1A_DFdRvs5HT3hs1nAWRqjpk036RY&headerType=none&fp=android&type=tcp&sni=proxy11.h1guro.ovh&sid=f16035de5d48395f#Vellor%20ES%20-%20Madrid",
+                isLiveServer = true,
+                isP2p = true,
+                isStreaming = true,
+                isStealth = true,
+                isFavorite = true
+            ),
+            ServerLocation(
+                id = "srv_pl",
+                country = "Poland",
+                countryCode = "PL",
+                city = "Warsaw",
+                cityCode = "WAW",
+                flagEmoji = "🇵🇱",
+                pingMs = 21,
+                loadPercent = 16,
+                ipAddress = "193.34.212.8",
+                vlessUrl = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@pl1.h1cloud.net:25558?security=reality&encryption=none&pbk=bls7cc5bJGz20-1A_DFdRvs5HT3hs1nAWRqjpk036RY&headerType=none&fp=android&type=tcp&sni=proxy11.h1guro.ovh&sid=f16035de5d48395f#Vellor%20PL%20-%20Warsaw",
+                isLiveServer = true,
+                isP2p = true,
+                isStreaming = true,
+                isStealth = true,
+                isFavorite = true
+            ),
+            ServerLocation(
+                id = "srv_jp",
+                country = "Japan",
+                countryCode = "JP",
+                city = "Tokyo",
+                cityCode = "TYO",
+                flagEmoji = "🇯🇵",
+                pingMs = 38,
+                loadPercent = 23,
+                ipAddress = "156.146.56.88",
+                isLiveServer = true,
+                isP2p = true,
+                isStreaming = true,
+                isStealth = true,
+                isFavorite = true
+            ),
+            ServerLocation(
+                id = "srv_ch",
+                country = "Switzerland",
+                countryCode = "CH",
+                city = "Zurich",
+                cityCode = "ZRH",
+                flagEmoji = "🇨🇭",
+                pingMs = 18,
+                loadPercent = 14,
+                ipAddress = "194.230.144.1",
+                isLiveServer = true,
+                isP2p = true,
+                isStreaming = true,
+                isStealth = true,
+                isFavorite = true
+            ),
+            ServerLocation(
+                id = "srv_gb",
+                country = "United Kingdom",
+                countryCode = "GB",
+                city = "London",
+                cityCode = "LON",
+                flagEmoji = "🇬🇧",
+                pingMs = 26,
+                loadPercent = 29,
+                ipAddress = "185.107.56.2",
+                isLiveServer = true,
+                isP2p = true,
+                isStreaming = true,
+                isStealth = true,
+                isFavorite = false
+            ),
+            ServerLocation(
+                id = "srv_nl",
+                country = "Netherlands",
+                countryCode = "NL",
+                city = "Amsterdam",
+                cityCode = "AMS",
+                flagEmoji = "🇳🇱",
+                pingMs = 22,
+                loadPercent = 17,
+                ipAddress = "149.202.88.9",
+                isLiveServer = true,
+                isP2p = true,
+                isStreaming = true,
+                isStealth = true,
+                isFavorite = false
+            )
         )
     )
-
-    private val _servers = MutableStateFlow(initialServers)
     val servers = _servers.asStateFlow()
 
-    val allSessions: Flow<List<VpnSession>> = sessionDao.getAllSessions()
-
     fun toggleFavorite(serverId: String) {
-        _servers.update { list ->
-            list.map { if (it.id == serverId) it.copy(isFavorite = !it.isFavorite) else it }
+        _servers.value = _servers.value.map { server ->
+            if (server.id == serverId) server.copy(isFavorite = !server.isFavorite) else server
         }
     }
 
-    suspend fun saveSession(session: VpnSession): Long = sessionDao.insertSession(session)
+    val sessions: Flow<List<VpnSession>> = dao.getAllSessions()
 
-    suspend fun clearHistory() = sessionDao.clearAll()
+    suspend fun saveSession(session: VpnSession): Long = dao.insertSession(session)
 
-    suspend fun deleteSession(id: Long) = sessionDao.deleteById(id)
+    suspend fun clearHistory() = dao.clearAll()
 }

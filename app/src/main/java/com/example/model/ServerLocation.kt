@@ -3,19 +3,21 @@ package com.example.model
 data class ServerLocation(
     val id: String,
     val country: String,
-    val city: String,
     val countryCode: String,
+    val city: String,
     val cityCode: String,
-    val flagEmoji: String = "",
-    val photoUrl: String = "",
+    val flagEmoji: String,
     val pingMs: Int,
     val loadPercent: Int,
     val ipAddress: String,
-    val isP2p: Boolean = false,
-    val isStreaming: Boolean = false,
-    val isDoubleVpn: Boolean = false,
-    val isStealth: Boolean = false,
+    val vlessUrl: String = "",
+    val photoUrl: String = "",
+    val isLiveServer: Boolean = true,
+    val isP2p: Boolean = true,
+    val isStreaming: Boolean = true,
+    val isStealth: Boolean = true,
     val isFavorite: Boolean = false
 ) {
-    val fullName: String get() = "$city, $countryCode"
+    val fullName: String
+        get() = "$country ($city)"
 }
