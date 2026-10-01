@@ -149,20 +149,29 @@ class VpnViewModel @JvmOverloads constructor(
     }
 
     fun setCustomAvatar(context: android.content.Context, uri: android.net.Uri) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Remove older avatar files to avoid storage accumulation
-                context.filesDir.listFiles { file -> file.name.startsWith("custom_avatar") }?.forEach { it.delete() }
+                val resolver = context.contentResolver
+                val inputStream = resolver.openInputStream(uri)
+                    ?: throw IllegalStateException("Не удалось открыть изображение из галереи")
+
+                context.filesDir.listFiles { file -> file.name.startsWith("custom_avatar") }
+                    ?.forEach { it.delete() }
+
                 val avatarFile = java.io.File(context.filesDir, "custom_avatar_${System.currentTimeMillis()}.png")
-                context.contentResolver.openInputStream(uri)?.use { input ->
+                inputStream.use { input ->
                     avatarFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 }
-                _customAvatarPath.value = avatarFile.absolutePath
-                prefs.edit().putString("user_custom_avatar_path", avatarFile.absolutePath).apply()
+
+                val filePath = avatarFile.absolutePath
+                _customAvatarPath.value = filePath
+                prefs.edit().putString("user_custom_avatar_path", filePath).apply()
             } catch (e: Exception) {
-                android.util.Log.e("Vellor", "Failed to save avatar from gallery", e)
+                Log.e("Vellor", "Failed to save avatar from gallery", e)
+                _customAvatarPath.value = null
+                prefs.edit().remove("user_custom_avatar_path").apply()
             }
         }
     }
@@ -215,6 +224,7 @@ class VpnViewModel @JvmOverloads constructor(
     private var timerJob: Job? = null
     private var telemetryJob: Job? = null
     private var pingJob: Job? = null
+    private var selectedServerPingJob: Job? = null
     private var connectionStartTime: Long = 0L
     private var totalBytesDownloadedSession: Long = 0L
     private var totalBytesUploadedSession: Long = 0L
@@ -358,7 +368,7 @@ class VpnViewModel @JvmOverloads constructor(
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 _vpnState.value = VpnState.DISCONNECTED
-                showUnavailable(if (e is SubscriptionException) e.message.orEmpty() else "Не удалось запустить VPN. Проверьте разрешение Android и подключение к интернету.")
+                showUnavailable(if (e is SubscriptionException) e.message.orEmpty() else "Не удалось запустить VPN. Проверьте разрешение Android и подключение.")
             }
         }
     }
@@ -375,8 +385,6 @@ class VpnViewModel @JvmOverloads constructor(
         val uploaded = totalBytesUploadedSession
         _vpnState.value = VpnState.DISCONNECTING
         try {
-            // Android binds an established VpnService. stopService alone cannot
-            // destroy it while TUN is open, so ask the service to close TUN first.
             getApplication<Application>().startService(
                 Intent(getApplication(), VellorVpnService::class.java)
                     .setAction(VellorVpnService.ACTION_DISCONNECT)
@@ -474,10 +482,26 @@ class VpnViewModel @JvmOverloads constructor(
                     _pingMs.value = livePing
                 }
 
-                // If battery saver is enabled and device is in low-power mode, reduce ping frequency to 15s
                 val inLowPower = _isBatterySaverEnabled.value && _isLowPowerMode.value
                 val nextDelayMs = if (inLowPower) 15000L else 2500L
                 delay(nextDelayMs)
+            }
+        }
+
+        selectedServerPingJob?.cancel()
+        selectedServerPingJob = viewModelScope.launch(Dispatchers.IO) {
+            while (_vpnState.value != VpnState.CONNECTED) {
+                val server = _selectedServer.value
+                if (server.id != "inactive" && server.ipAddress.isNotBlank()) {
+                    val livePing = com.example.util.NetworkLatencyMeter.measureLiveLatency(
+                        server.vlessUrl,
+                        server.ipAddress
+                    )
+                    if (livePing > 0) {
+                        _pingMs.value = livePing
+                    }
+                }
+                delay(2500L)
             }
         }
     }
@@ -486,6 +510,7 @@ class VpnViewModel @JvmOverloads constructor(
         timerJob?.cancel()
         telemetryJob?.cancel()
         pingJob?.cancel()
+        selectedServerPingJob?.cancel()
         _downloadSpeedMb.value = 0f
         _uploadSpeedMb.value = 0f
         _pingMs.value = 0
