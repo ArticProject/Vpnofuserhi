@@ -12,7 +12,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +38,25 @@ fun VellorApp(
     val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsStateWithLifecycle()
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var isAppSplashVisible by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        viewModel.verifyNetworkConnection(context)
+    }
+
+    if (isAppSplashVisible) {
+        com.example.ui.components.CosmosAppSplashScreen(
+            visible = true,
+            isDarkTheme = isDarkTheme,
+            currentLanguage = selectedLanguage,
+            onFinished = {
+                isAppSplashVisible = false
+            }
+        )
+        return
+    }
 
     // If onboarding is not completed yet, show the initial interactive cards flow
     if (!isOnboardingCompleted) {
@@ -84,6 +107,8 @@ fun VellorApp(
     val activationError by viewModel.activationError.collectAsStateWithLifecycle()
     val activationBusy by viewModel.activationBusy.collectAsStateWithLifecycle()
     val subscription by viewModel.subscription.collectAsStateWithLifecycle()
+    val isBatterySaverEnabled by viewModel.isBatterySaverEnabled.collectAsStateWithLifecycle()
+    val isLowPowerMode by viewModel.isLowPowerMode.collectAsStateWithLifecycle()
 
     if (pagerState.currentPage != 0) {
         BackHandler {
@@ -140,6 +165,9 @@ fun VellorApp(
                                 }
                             },
                             onInspectServer = { server -> viewModel.inspectServer(server) },
+                            isBatterySaverEnabled = isBatterySaverEnabled,
+                            onToggleBatterySaver = { viewModel.toggleBatterySaver(it) },
+                            isLowPowerMode = isLowPowerMode,
                             onResetOnboarding = { viewModel.resetOnboarding() }
                         )
                     }
@@ -188,6 +216,9 @@ fun VellorApp(
                             onSelectAvatar = { index -> viewModel.setAvatarIndex(index) },
                             onPickCustomAvatar = { uri -> viewModel.setCustomAvatar(localContext, uri) },
                             onClearHistory = { viewModel.clearHistory() },
+                            isBatterySaverEnabled = isBatterySaverEnabled,
+                            onToggleBatterySaver = { viewModel.toggleBatterySaver(it) },
+                            isLowPowerMode = isLowPowerMode,
                             isDarkTheme = isDarkTheme,
                             currentLanguage = selectedLanguage
                         )

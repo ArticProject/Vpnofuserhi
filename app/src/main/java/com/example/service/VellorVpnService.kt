@@ -65,8 +65,16 @@ class VellorVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_CONNECT) {
-            startVpn(intent.getStringExtra(EXTRA_SERVER_NAME) ?: "Vellor",
-                intent.getStringExtra(EXTRA_VLESS_URL).orEmpty())
+            val serverName = intent.getStringExtra(EXTRA_SERVER_NAME)
+            val vlessUrl = intent.getStringExtra(EXTRA_VLESS_URL)
+            if (vlessUrl.isNullOrBlank()) {
+                val storage = com.example.subscription.SubscriptionStorage(this)
+                val server = com.example.subscription.H1Access.DEFAULT_SERVERS.firstOrNull { it.id == storage.selectedServerId }
+                    ?: com.example.subscription.H1Access.FINLAND_SERVER
+                startVpn(server.fullName, server.vlessUrl)
+            } else {
+                startVpn(serverName ?: "Vellor", vlessUrl)
+            }
         } else stopVpn()
         return START_NOT_STICKY
     }
@@ -120,6 +128,8 @@ class VellorVpnService : VpnService() {
                     }
                 }
                 var lastSample = SystemClock.elapsedRealtime()
+                var ticks = 0
+                var currentPing = ping.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                 trafficTask = worker.scheduleWithFixedDelay({
                     if (isCurrent(request)) {
                         try {
@@ -127,12 +137,25 @@ class VellorVpnService : VpnService() {
                             val now = SystemClock.elapsedRealtime()
                             val elapsed = (now - lastSample).coerceAtLeast(1)
                             lastSample = now
+                            ticks++
+                            if (ticks % 3 == 0) {
+                                try {
+                                    val measured = core.probe().coerceAtMost(9999).toInt()
+                                    if (measured in 1..2500) {
+                                        currentPing = measured
+                                    }
+                                } catch (_: Exception) {
+                                    // Keep current ping
+                                }
+                            }
                             val previous = telemetry.value
                             telemetry.value = previous.copy(
                                 downloaded = previous.downloaded + bytes.downloaded,
                                 uploaded = previous.uploaded + bytes.uploaded,
                                 downloadMbps = bytes.downloaded * 8f / (elapsed * 1000f),
-                                uploadMbps = bytes.uploaded * 8f / (elapsed * 1000f))
+                                uploadMbps = bytes.uploaded * 8f / (elapsed * 1000f),
+                                pingMs = currentPing
+                            )
                         } catch (_: Exception) {
                             fail(request, "VPN остановлен из-за ошибки ядра. Подключитесь повторно.")
                         }

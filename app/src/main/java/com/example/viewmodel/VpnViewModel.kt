@@ -20,6 +20,7 @@ import com.example.model.VpnSession
 import com.example.model.VpnState
 import com.example.subscription.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,6 +36,7 @@ class VpnViewModel @JvmOverloads constructor(
     private val subscriptionProvider: SubscriptionProvider = H1SubscriptionClient()
 ) : AndroidViewModel(application) {
 
+    private val app = application
     private val repository: VpnRepository
 
     init {
@@ -149,7 +151,9 @@ class VpnViewModel @JvmOverloads constructor(
     fun setCustomAvatar(context: android.content.Context, uri: android.net.Uri) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                val avatarFile = java.io.File(context.filesDir, "custom_avatar.png")
+                // Remove older avatar files to avoid storage accumulation
+                context.filesDir.listFiles { file -> file.name.startsWith("custom_avatar") }?.forEach { it.delete() }
+                val avatarFile = java.io.File(context.filesDir, "custom_avatar_${System.currentTimeMillis()}.png")
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     avatarFile.outputStream().use { output ->
                         input.copyTo(output)
@@ -173,6 +177,24 @@ class VpnViewModel @JvmOverloads constructor(
     )
     val isRegistered: StateFlow<Boolean> = _isRegistered.asStateFlow()
 
+    private val _isBatterySaverEnabled = MutableStateFlow(
+        prefs.getBoolean("vpn_battery_saver_enabled", true)
+    )
+    val isBatterySaverEnabled: StateFlow<Boolean> = _isBatterySaverEnabled.asStateFlow()
+
+    private val _isLowPowerMode = MutableStateFlow(false)
+    val isLowPowerMode: StateFlow<Boolean> = _isLowPowerMode.asStateFlow()
+
+    fun toggleBatterySaver(enabled: Boolean) {
+        _isBatterySaverEnabled.value = enabled
+        prefs.edit().putBoolean("vpn_battery_saver_enabled", enabled).apply()
+    }
+
+    fun checkPowerSaveMode() {
+        val pm = app.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        _isLowPowerMode.value = pm?.isPowerSaveMode == true
+    }
+
     private val accessStorage = SubscriptionStorage(application)
     private val _isActivated = MutableStateFlow(false)
     val isActivated = _isActivated.asStateFlow()
@@ -192,6 +214,7 @@ class VpnViewModel @JvmOverloads constructor(
 
     private var timerJob: Job? = null
     private var telemetryJob: Job? = null
+    private var pingJob: Job? = null
     private var connectionStartTime: Long = 0L
     private var totalBytesDownloadedSession: Long = 0L
     private var totalBytesUploadedSession: Long = 0L
@@ -239,6 +262,18 @@ class VpnViewModel @JvmOverloads constructor(
     }
 
     init {
+        checkPowerSaveMode()
+        try {
+            val filter = android.content.IntentFilter(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            app.registerReceiver(object : android.content.BroadcastReceiver() {
+                override fun onReceive(c: Context?, intent: android.content.Intent?) {
+                    checkPowerSaveMode()
+                }
+            }, filter)
+        } catch (e: Exception) {
+            android.util.Log.e("Vellor", "Failed to register power save receiver", e)
+        }
+
         // Migrate away from the old, local-only activation flag and embedded administrator key.
         prefs.edit().remove("activated_key").remove("is_activated").apply()
         if (accessStorage.key.isNotBlank()) activateKey(accessStorage.key, restoring = true)
@@ -247,6 +282,22 @@ class VpnViewModel @JvmOverloads constructor(
     fun clearConnectionFailure() {
         VellorVpnService.errorMessage.value = ""
         VellorVpnService.connectionFailed.value = false
+    }
+
+    fun verifyNetworkConnection(context: android.content.Context): Boolean {
+        return try {
+            val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val network = cm?.activeNetwork
+            val caps = cm?.getNetworkCapabilities(network)
+            val hasInternet = caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            if (!hasInternet) {
+                VellorVpnService.errorMessage.value = "Нет подключения к интернету"
+                VellorVpnService.connectionFailed.value = true
+            }
+            hasInternet
+        } catch (e: Exception) {
+            true
+        }
     }
 
     fun onVpnPermissionGranted() {
@@ -362,6 +413,31 @@ class VpnViewModel @JvmOverloads constructor(
         }
     }
 
+    private fun measureActivePing(): Int {
+        val start = System.currentTimeMillis()
+        return try {
+            java.net.Socket().use { socket ->
+                socket.connect(java.net.InetSocketAddress("1.1.1.1", 53), 1800)
+                (System.currentTimeMillis() - start).toInt().coerceAtLeast(1)
+            }
+        } catch (_: Exception) {
+            try {
+                val startHttp = System.currentTimeMillis()
+                val url = java.net.URL("https://www.gstatic.com/generate_204")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 2000
+                conn.readTimeout = 2000
+                conn.instanceFollowRedirects = false
+                conn.useCaches = false
+                conn.connect()
+                conn.disconnect()
+                (System.currentTimeMillis() - startHttp).toInt().coerceAtLeast(1)
+            } catch (_: Exception) {
+                -1
+            }
+        }
+    }
+
     private fun startTelemetry() {
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
@@ -377,7 +453,6 @@ class VpnViewModel @JvmOverloads constructor(
             VellorVpnService.telemetry.collect { sample ->
                 _downloadSpeedMb.value = sample.downloadMbps
                 _uploadSpeedMb.value = sample.uploadMbps
-                _pingMs.value = sample.pingMs
                 totalBytesDownloadedSession = sample.downloaded
                 totalBytesUploadedSession = sample.uploaded
                 history.add(sample.downloadMbps)
@@ -385,13 +460,35 @@ class VpnViewModel @JvmOverloads constructor(
                 _speedHistory.value = history.toList()
             }
         }
+
+        pingJob?.cancel()
+        pingJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(300)
+            while (_vpnState.value == VpnState.CONNECTED) {
+                val server = _selectedServer.value
+                val livePing = com.example.util.NetworkLatencyMeter.measureLiveLatency(
+                    server.vlessUrl,
+                    server.ipAddress
+                )
+                if (livePing > 0 && _vpnState.value == VpnState.CONNECTED) {
+                    _pingMs.value = livePing
+                }
+
+                // If battery saver is enabled and device is in low-power mode, reduce ping frequency to 15s
+                val inLowPower = _isBatterySaverEnabled.value && _isLowPowerMode.value
+                val nextDelayMs = if (inLowPower) 15000L else 2500L
+                delay(nextDelayMs)
+            }
+        }
     }
 
     private fun stopTelemetry() {
         timerJob?.cancel()
         telemetryJob?.cancel()
+        pingJob?.cancel()
         _downloadSpeedMb.value = 0f
         _uploadSpeedMb.value = 0f
+        _pingMs.value = 0
     }
 
     fun selectServer(server: ServerLocation) {

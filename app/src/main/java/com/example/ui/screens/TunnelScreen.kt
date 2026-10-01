@@ -37,6 +37,9 @@ fun TunnelScreen(
     onSelectServer: (ServerLocation) -> Unit,
     onOpenServerPicker: () -> Unit,
     onInspectServer: (ServerLocation) -> Unit,
+    isBatterySaverEnabled: Boolean = true,
+    onToggleBatterySaver: (Boolean) -> Unit = {},
+    isLowPowerMode: Boolean = false,
     onResetOnboarding: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -46,7 +49,7 @@ fun TunnelScreen(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 120.dp)
     ) {
-        // 1. Top Brand Header: "VL" black circle, "Vellor", "TYO", and hamburger menu with theme & language popup
+        // 1. Top Brand Header: "VL" black circle, "Vellor", "TYO", and hamburger menu with theme, language & battery saver
         item {
             VellorHeader(
                 activeCityCode = selectedServer.cityCode,
@@ -54,6 +57,9 @@ fun TunnelScreen(
                 onToggleDarkTheme = onToggleDarkTheme,
                 currentLanguage = currentLanguage,
                 onSelectLanguage = onSelectLanguage,
+                isBatterySaverEnabled = isBatterySaverEnabled,
+                onToggleBatterySaver = onToggleBatterySaver,
+                isLowPowerMode = isLowPowerMode,
                 onResetOnboarding = onResetOnboarding
             )
         }

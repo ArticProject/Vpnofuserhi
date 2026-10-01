@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
@@ -46,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -84,7 +86,7 @@ data class AvatarOption(
 )
 
 val AVATAR_OPTIONS = listOf(
-    AvatarOption(0, "Monogram", Icons.Filled.Person, listOf(Color(0xFF272422), Color(0xFF141210))),
+    AvatarOption(0, "Sculpture", Icons.Filled.Person, listOf(Color(0xFF272422), Color(0xFF141210))),
     AvatarOption(1, "Enclave", Icons.Filled.Security, listOf(Color(0xFF2D2824), Color(0xFF1B1714))),
     AvatarOption(2, "Cipher Key", Icons.Filled.VpnKey, listOf(Color(0xFF332D27), Color(0xFF1E1A16))),
     AvatarOption(3, "Telemetry", Icons.Filled.Speed, listOf(Color(0xFF282522), Color(0xFF161412))),
@@ -113,6 +115,9 @@ fun ProfileScreen(
     onSelectAvatar: (Int) -> Unit = {},
     onPickCustomAvatar: (Uri) -> Unit = {},
     onClearHistory: () -> Unit,
+    isBatterySaverEnabled: Boolean = true,
+    onToggleBatterySaver: (Boolean) -> Unit = {},
+    isLowPowerMode: Boolean = false,
     isDarkTheme: Boolean = false,
     currentLanguage: AppLanguage = AppLanguage.SYSTEM,
     modifier: Modifier = Modifier
@@ -190,39 +195,68 @@ fun ProfileScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        // Interactive Avatar (Tap to change from gallery or presets)
-                        Box(
-                            modifier = Modifier
-                                .size(58.dp)
-                                .clip(CircleShape)
-                                .background(Brush.linearGradient(currentAvatar.bgColors))
-                                .border(1.2.dp, cardBorder, CircleShape)
-                                .bounceClick(scaleDown = 0.92f) { showAvatarDialog = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (hasCustomAvatar) {
-                                AsyncImage(
-                                    model = File(customAvatarPath!!),
-                                    contentDescription = "Custom User Avatar",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clip(CircleShape)
-                                )
-                            } else if (currentAvatar.id == 0) {
-                                Text(
-                                    text = username.take(2).uppercase().ifBlank { "US" },
-                                    color = textPrimary,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            } else {
+                        // Interactive Avatar (Tap to change from gallery)
+                        Box(contentAlignment = Alignment.BottomEnd) {
+                            Box(
+                                modifier = Modifier
+                                    .size(62.dp)
+                                    .clip(CircleShape)
+                                    .background(Brush.linearGradient(currentAvatar.bgColors))
+                                    .border(1.2.dp, cardBorder, CircleShape)
+                                    .bounceClick(scaleDown = 0.92f) {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (hasCustomAvatar) {
+                                    AsyncImage(
+                                        model = File(customAvatarPath!!),
+                                        contentDescription = "Custom User Avatar",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                    )
+                                } else if (currentAvatar.id == 0) {
+                                    androidx.compose.foundation.Image(
+                                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_avatar_sculpture),
+                                        contentDescription = "Sculpture Avatar",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = currentAvatar.icon,
+                                        contentDescription = "Avatar",
+                                        tint = textPrimary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            // Camera / Gallery badge overlay
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(textPrimary)
+                                    .border(1.5.dp, cardBg, CircleShape)
+                                    .bounceClick(scaleDown = 0.88f) {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Icon(
-                                    imageVector = currentAvatar.icon,
-                                    contentDescription = "Avatar",
-                                    tint = textPrimary,
-                                    modifier = Modifier.size(24.dp)
+                                    imageVector = Icons.Filled.PhotoLibrary,
+                                    contentDescription = "Pick from gallery",
+                                    tint = cardBg,
+                                    modifier = Modifier.size(11.dp)
                                 )
                             }
                         }
@@ -287,21 +321,58 @@ fun ProfileScreen(
                         }
                     }
 
-                    // Avatar badge button
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(innerBg)
-                            .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
-                            .bounceClick(scaleDown = 0.92f) { showAvatarDialog = true }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (isRu) "Аватар" else "Avatar",
-                            color = textSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        // Direct Pick from Gallery button
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(innerBg)
+                                .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                                .bounceClick(scaleDown = 0.92f) {
+                                    photoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                }
+                                .padding(horizontal = 10.dp, vertical = 7.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PhotoLibrary,
+                                    contentDescription = null,
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = if (isRu) "Галерея" else "Gallery",
+                                    color = textPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // Presets dialog button
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(innerBg)
+                                .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                                .bounceClick(scaleDown = 0.92f) { showAvatarDialog = true }
+                                .padding(horizontal = 8.dp, vertical = 7.dp)
+                        ) {
+                            Text(
+                                text = if (isRu) "Стили" else "Styles",
+                                color = textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
@@ -419,6 +490,106 @@ fun ProfileScreen(
                                     .padding(vertical = 4.dp, horizontal = 6.dp)
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        // 3.5. VPN Settings: Battery Saver Card
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(cardBg)
+                    .border(1.dp, cardBorder, RoundedCornerShape(20.dp))
+                    .padding(18.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(innerBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Power,
+                                    contentDescription = null,
+                                    tint = if (isBatterySaverEnabled) textPrimary else textSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = if (isRu) "Энергосбережение" else "Battery Saver",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textPrimary
+                                )
+                                Text(
+                                    text = if (isRu) "Настройки туннеля и питания" else "Tunnel & Power Settings",
+                                    fontSize = 11.sp,
+                                    color = textSecondary
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isBatterySaverEnabled,
+                            onCheckedChange = onToggleBatterySaver
+                        )
+                    }
+
+                    Text(
+                        text = if (isRu) {
+                            "При низком заряде аккумулятора или включении режима энергосбережения частота ICMP-пинга автоматически снижается с 2.5 до 15 секунд для экономии заряда."
+                        } else {
+                            "Reduces ICMP ping frequency from 2.5s to 15s when device enters low-power mode, conserving battery life."
+                        },
+                        fontSize = 12.sp,
+                        color = textSecondary,
+                        lineHeight = 17.sp
+                    )
+
+                    // Live Status Chip
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(innerBg)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isBatterySaverEnabled && isLowPowerMode) Color(0xFF10B981)
+                                    else Color(0xFF71717A)
+                                )
+                        )
+                        Text(
+                            text = if (isBatterySaverEnabled && isLowPowerMode) {
+                                (if (isRu) "Эко-режим активен (интервал 15 сек)" else "Eco mode active (15s interval)")
+                            } else {
+                                (if (isRu) "Стандартный режим (интервал 2.5 сек)" else "Standard mode (2.5s interval)")
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = textPrimary
+                        )
                     }
                 }
             }
@@ -586,12 +757,13 @@ fun ProfileScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (opt.id == 0) {
-                                    Text(
-                                        text = username.take(2).uppercase().ifBlank { "US" },
-                                        color = textPrimary,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
+                                    androidx.compose.foundation.Image(
+                                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_avatar_sculpture),
+                                        contentDescription = "Sculpture Avatar",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
                                     )
                                 } else {
                                     Icon(

@@ -29,12 +29,13 @@ fun getLocalCityDrawable(context: android.content.Context, cityCode: String): In
         "PAR" -> "img_city_paris"
         "BER" -> "img_city_berlin"
         "AMS" -> "img_city_amsterdam"
-        "RKV", "HEL" -> "img_city_reykjavik"
+        "HEL" -> "img_city_helsinki"
+        "RKV" -> "img_city_reykjavik"
         "WAS", "DC", "NYC" -> "img_city_washington"
         "ZRH" -> "img_city_zurich"
         "FRA" -> "img_city_frankfurt"
         "WAW" -> "img_city_warsaw"
-        else -> "img_city_frankfurt"
+        else -> "img_city_helsinki"
     }
     val resId = context.resources.getIdentifier(name, "drawable", context.packageName)
     return if (resId != 0) resId else null

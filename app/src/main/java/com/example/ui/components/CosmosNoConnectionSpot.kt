@@ -310,3 +310,68 @@ fun CosmosErrorOverlay(
         }
     }
 }
+
+/**
+ * Cosmos App Launch Splash Screen:
+ * Displayed for ~2.3 seconds on app launch with the bouncing physical 8 dots animation.
+ */
+@Composable
+fun CosmosAppSplashScreen(
+    visible: Boolean,
+    isDarkTheme: Boolean = true,
+    currentLanguage: AppLanguage = AppLanguage.SYSTEM,
+    onFinished: () -> Unit
+) {
+    if (!visible) return
+
+    val isRu = currentLanguage == AppLanguage.RUSSIAN
+    val bgColor = if (isDarkTheme) Color(0xFF09090B) else Color.White
+    val textPrimary = if (isDarkTheme) Color.White else Color(0xFF09090B)
+    val textSecondary = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2300)
+        onFinished()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bgColor),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Cosmos physical 8-dot animation
+            CosmosOneShotDotsAnimation(
+                playTrigger = 1,
+                isDarkTheme = isDarkTheme,
+                dotColor = textPrimary
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // App Brand Name
+            Text(
+                text = "VELLOR",
+                color = textPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 4.sp
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Subtitle status
+            Text(
+                text = if (isRu) "ИНИЦИАЛИЗАЦИЯ ШЛЮЗА..." else "INITIALIZING SECURE ENCLAVE...",
+                color = textSecondary.copy(alpha = 0.6f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.6.sp
+            )
+        }
+    }
+}

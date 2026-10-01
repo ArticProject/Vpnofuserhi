@@ -89,7 +89,15 @@ fun VellorHeadlineSection(
 
         Spacer(modifier = Modifier.height(22.dp))
 
-        // Two signature pill buttons matching screenshot with bounceClick
+        // Two signature pill buttons with modern semi-transparent frosted background
+        val connectBg = if (isDarkTheme) Color.White.copy(alpha = 0.16f) else Color(0xFF09090B).copy(alpha = 0.12f)
+        val connectBorder = if (isDarkTheme) Color.White.copy(alpha = 0.35f) else Color(0xFF09090B).copy(alpha = 0.25f)
+        val connectTextColor = if (isDarkTheme) Color.White else Color(0xFF09090B)
+
+        val inspectBg = if (isDarkTheme) Color.White.copy(alpha = 0.07f) else Color(0xFF09090B).copy(alpha = 0.05f)
+        val inspectBorder = if (isDarkTheme) Color.White.copy(alpha = 0.20f) else Color(0xFF09090B).copy(alpha = 0.15f)
+        val inspectTextColor = if (isDarkTheme) Color.White else Color(0xFF09090B)
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -99,7 +107,8 @@ fun VellorHeadlineSection(
                     .weight(1f)
                     .height(48.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(if (isDarkTheme) Color.White else Color(0xFF09090B))
+                    .background(connectBg)
+                    .border(1.dp, connectBorder, RoundedCornerShape(24.dp))
                     .bounceClick(scaleDown = 0.94f, onClick = onToggleConnect)
                     .testTag("action_toggle_tunnel"),
                 contentAlignment = Alignment.Center
@@ -114,14 +123,14 @@ fun VellorHeadlineSection(
                             .clip(CircleShape)
                             .background(
                                 if (isConnected) VellorEmerald
-                                else if (isDarkTheme) Color(0xFF09090B) else Color.White
+                                else if (isDarkTheme) Color.White.copy(alpha = 0.7f) else Color(0xFF09090B).copy(alpha = 0.7f)
                             )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (isConnected) (if (isRu) "Отключить" else "Disconnect")
                                else (if (isRu) "Подключить туннель" else "Connect Tunnel"),
-                        color = if (isDarkTheme) Color(0xFF09090B) else Color.White,
+                        color = connectTextColor,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -133,10 +142,10 @@ fun VellorHeadlineSection(
                     .weight(1f)
                     .height(48.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(if (isDarkTheme) Color(0xFF18181B) else Color.White)
+                    .background(inspectBg)
                     .border(
                         1.dp,
-                        if (isDarkTheme) Color(0xFF27272A) else Color(0xFFE5E5EA),
+                        inspectBorder,
                         RoundedCornerShape(24.dp)
                     )
                     .bounceClick(scaleDown = 0.94f, onClick = onInspectClick)
@@ -145,7 +154,7 @@ fun VellorHeadlineSection(
             ) {
                 Text(
                     text = if (isRu) "Инфо (${selectedServer.cityCode})" else "Inspect (${selectedServer.cityCode})",
-                    color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                    color = inspectTextColor,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
                 )

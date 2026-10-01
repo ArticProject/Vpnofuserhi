@@ -67,6 +67,9 @@ fun VellorHeader(
     onToggleDarkTheme: (Boolean) -> Unit = {},
     currentLanguage: AppLanguage = AppLanguage.SYSTEM,
     onSelectLanguage: (AppLanguage) -> Unit = {},
+    isBatterySaverEnabled: Boolean = true,
+    onToggleBatterySaver: (Boolean) -> Unit = {},
+    isLowPowerMode: Boolean = false,
     onResetOnboarding: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -146,7 +149,7 @@ fun VellorHeader(
                     )
                 }
 
-                // Dropdown popup for Theme and Language
+                // Dropdown popup for Theme, Language and Battery Saver
                 VellorPreferencesMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
@@ -154,6 +157,9 @@ fun VellorHeader(
                     onToggleDarkTheme = onToggleDarkTheme,
                     currentLanguage = currentLanguage,
                     onSelectLanguage = onSelectLanguage,
+                    isBatterySaverEnabled = isBatterySaverEnabled,
+                    onToggleBatterySaver = onToggleBatterySaver,
+                    isLowPowerMode = isLowPowerMode,
                     onResetOnboarding = onResetOnboarding
                 )
             }
@@ -166,6 +172,7 @@ fun VellorHeroCard(
     vpnState: VpnState,
     selectedServer: ServerLocation,
     onToggleConnect: () -> Unit,
+    pingMs: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val isConnected = vpnState == VpnState.CONNECTED
@@ -201,6 +208,38 @@ fun VellorHeroCard(
                     )
                 )
         )
+
+        // Live Ping status chip at top-end of the hero card
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(14.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.65f))
+                .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                .padding(horizontal = 10.dp, vertical = 5.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(if (isConnected) VellorEmerald else Color(0xFFA1A1AA))
+                )
+                Text(
+                    text = if (isConnected && pingMs > 0) "LIVE ${pingMs}ms"
+                           else if (pingMs > 0) "${pingMs}ms"
+                           else "${selectedServer.pingMs}ms",
+                    color = if (isConnected) Color.White else Color(0xFFA1A1AA),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.4.sp
+                )
+            }
+        }
 
         // Soft radial vignette around the center
         Box(
@@ -242,12 +281,12 @@ fun VellorHeroCard(
                 modifier = Modifier
                     .size(96.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.70f))
+                    .background(Color.Black.copy(alpha = 0.45f))
                     .border(2.dp, outerBorderColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 val buttonBg by animateColorAsState(
-                    targetValue = if (isConnected) Color.White else Color(0xFF09090B),
+                    targetValue = if (isConnected) Color.White.copy(alpha = 0.85f) else Color(0xFF09090B).copy(alpha = 0.55f),
                     animationSpec = spring(dampingRatio = 0.8f, stiffness = 350f),
                     label = "dial_btn_bg"
                 )

@@ -173,4 +173,12 @@ class VpnViewModelTest {
         assertEquals("", model.selectedServer.value.vlessUrl)
     }
 
+    @Test fun batterySaverToggleUpdatesStateAndPersists() {
+        assertTrue(model.isBatterySaverEnabled.value)
+        model.toggleBatterySaver(false)
+        assertFalse(model.isBatterySaverEnabled.value)
+        model.toggleBatterySaver(true)
+        assertTrue(model.isBatterySaverEnabled.value)
+    }
+
 }
