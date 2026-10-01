@@ -32,7 +32,6 @@ fun TunnelScreen(
     isDarkTheme: Boolean,
     onToggleDarkTheme: (Boolean) -> Unit,
     currentLanguage: AppLanguage,
-    selectedLanguage: AppLanguage = currentLanguage,
     onSelectLanguage: (AppLanguage) -> Unit,
     onToggleConnect: () -> Unit,
     onSelectServer: (ServerLocation) -> Unit,
@@ -53,7 +52,7 @@ fun TunnelScreen(
                 activeCityCode = selectedServer.cityCode,
                 isDarkTheme = isDarkTheme,
                 onToggleDarkTheme = onToggleDarkTheme,
-                currentLanguage = selectedLanguage,
+                currentLanguage = currentLanguage,
                 onSelectLanguage = onSelectLanguage,
                 onResetOnboarding = onResetOnboarding
             )
@@ -65,13 +64,12 @@ fun TunnelScreen(
                 VellorHeroCard(
                     vpnState = vpnState,
                     selectedServer = selectedServer,
-                    onToggleConnect = onToggleConnect,
-                    isRu = currentLanguage == AppLanguage.RUSSIAN
+                    onToggleConnect = onToggleConnect
                 )
             }
         }
 
-        // 3. Status Section: connection state, selected location, live stats + pills
+        // 3. Headline Section: "NEW PROTOCOL" + "Everyday privacy with\na\nsharp silhouette." + pills
         item {
             Spacer(modifier = Modifier.height(18.dp))
             VellorHeadlineSection(
@@ -79,16 +77,12 @@ fun TunnelScreen(
                 selectedServer = selectedServer,
                 onToggleConnect = onToggleConnect,
                 onInspectClick = { onInspectServer(selectedServer) },
-                durationFormatted = durationFormatted,
-                pingMs = pingMs,
-                downloadMbps = downloadSpeedMb,
-                uploadMbps = uploadSpeedMb,
                 currentLanguage = currentLanguage,
                 isDarkTheme = isDarkTheme
             )
         }
 
-        // 4. Server cards
+        // 4. Featured Nodes Grid ("FEATURED", "Selected nodes", "A quick edit from the full network.")
         item {
             Spacer(modifier = Modifier.height(26.dp))
             VellorFeaturedNodesSection(

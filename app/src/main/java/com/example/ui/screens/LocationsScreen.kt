@@ -281,17 +281,15 @@ fun LocationsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = if (server.pingMs > 0) "${server.flagEmoji} ${server.cityCode} · ${server.pingMs} ms" else "${server.flagEmoji} ${server.cityCode} · VLESS",
+                                text = "${server.cityCode} · ${server.pingMs}ms",
                                 fontSize = 12.sp,
                                 color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
                             )
-                            if (server.loadPercent > 0) {
-                                Text(
-                                    text = "Load ${server.loadPercent}%",
-                                    fontSize = 12.sp,
-                                    color = if (server.loadPercent < 40) VellorEmerald else if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
-                                )
-                            }
+                            Text(
+                                text = "Load ${server.loadPercent}%",
+                                fontSize = 12.sp,
+                                color = if (server.loadPercent < 40) VellorEmerald else if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
+                            )
                         }
                     }
 
