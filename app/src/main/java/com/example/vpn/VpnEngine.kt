@@ -49,21 +49,25 @@ class XrayEngine(context: Context) : VpnEngine {
     }
 
     override fun probe(): Long {
-        return try {
-            core.measureDelay("https://www.gstatic.com/generate_204")
-        } catch (_: Exception) {
+        var lastError: Exception? = null
+        PROBE_URLS.forEach { url ->
             try {
-                core.measureDelay("https://cp.cloudflare.com/generate_204")
-            } catch (_: Exception) {
-                try {
-                    core.measureDelay("https://www.google.com/generate_204")
-                } catch (_: Exception) {
-                    48L
-                }
+                return core.measureDelay(url).coerceAtLeast(1)
+            } catch (e: Exception) {
+                lastError = e
             }
-        }.coerceAtLeast(15)
+        }
+        throw IllegalStateException("VPN server is unreachable", lastError)
     }
 
     override fun readTraffic() = TrafficBytes.parse(core.queryAllOutboundTrafficStats())
     override fun close() = core.stopLoop()
+
+    private companion object {
+        val PROBE_URLS = listOf(
+            "https://www.gstatic.com/generate_204",
+            "https://cp.cloudflare.com/generate_204",
+            "https://www.google.com/generate_204"
+        )
+    }
 }

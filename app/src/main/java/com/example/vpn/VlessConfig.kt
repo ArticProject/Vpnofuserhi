@@ -35,8 +35,10 @@ object VlessConfig {
             require(sid.length <= 16 && sid.length % 2 == 0 && sid.matches(Regex("[0-9a-fA-F]*")))
             val sni = params["sni"].orEmpty()
             require(sni.isNotBlank() && sni.length <= 253 && sni.none { it.isWhitespace() })
-            val fingerprint = params["fp"] ?: "chrome"
-            require(fingerprint in setOf("chrome", "firefox", "safari", "ios", "android", "edge", "random", "randomized"))
+            val requested = params["fp"] ?: "chrome"
+            require(requested in setOf("chrome", "firefox", "safari", "ios", "android", "edge", "random", "randomized"))
+            // uTLS "android" (OkHttp/Android 11) has no TLS 1.3, which REALITY requires.
+            val fingerprint = if (requested == "android") "chrome" else requested
             val user = JSONObject().put("id", id).put("encryption", "none").put("flow", flow)
             val reality = JSONObject().put("serverName", sni).put("fingerprint", fingerprint)
                 .put("publicKey", key).put("shortId", sid).put("spiderX", params["spx"] ?: "/")
