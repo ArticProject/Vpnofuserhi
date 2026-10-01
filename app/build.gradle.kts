@@ -16,13 +16,16 @@ android {
         applicationId = "com.aistudio.vellorvpn.vxqtz"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2-subscriptions"
+        versionCode = 5
+        versionName = "1.3-optimized"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            isDebuggable = true
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -40,7 +43,6 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
-    // The app uses no geoip/geosite rules. Avoid bundling unused country databases.
     androidResources { ignoreAssetsPattern = "geoip.dat:geoip-only-cn-private.dat:geosite.dat" }
     packaging { jniLibs.useLegacyPackaging = true }
     splits {
@@ -57,7 +59,12 @@ android {
     }
 }
 
-// Official AndroidLibXrayLite release, pinned and verified before use.
+android {
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.8"
+    }
+}
+
 val xrayAar = layout.buildDirectory.file("generated/xray/libv2ray-26.9.9.aar")
 val prepareXray by tasks.registering {
     outputs.file(xrayAar)
