@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.model.AppLanguage
 import com.example.model.ServerLocation
 import com.example.model.VpnProtocol
@@ -49,8 +51,7 @@ fun TunnelScreen(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 120.dp)
     ) {
-        // 1. Top Brand Header: "VL" black circle, "Vellor", "TYO", and hamburger menu with theme, language & battery saver
-        item {
+        item(key = "header") {
             VellorHeader(
                 activeCityCode = selectedServer.cityCode,
                 isDarkTheme = isDarkTheme,
@@ -64,8 +65,7 @@ fun TunnelScreen(
             )
         }
 
-        // 2. Hero Visual Architectural Card with Tokyo Photo, Left Plate & Right Dial
-        item {
+        item(key = "hero_card") {
             Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
                 VellorHeroCard(
                     vpnState = vpnState,
@@ -75,8 +75,7 @@ fun TunnelScreen(
             }
         }
 
-        // 3. Headline Section: "NEW PROTOCOL" + "Everyday privacy with\na\nsharp silhouette." + pills
-        item {
+        item(key = "headline") {
             Spacer(modifier = Modifier.height(18.dp))
             VellorHeadlineSection(
                 vpnState = vpnState,
@@ -88,8 +87,7 @@ fun TunnelScreen(
             )
         }
 
-        // 4. Featured Nodes Grid ("FEATURED", "Selected nodes", "A quick edit from the full network.")
-        item {
+        item(key = "featured_nodes") {
             Spacer(modifier = Modifier.height(26.dp))
             VellorFeaturedNodesSection(
                 servers = allServers,
