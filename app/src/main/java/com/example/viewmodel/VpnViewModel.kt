@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
+import com.example.service.VellorVpnService
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.VpnDatabase
@@ -16,6 +18,9 @@ import com.example.model.ServerLocation
 import com.example.model.VpnProtocol
 import com.example.model.VpnSession
 import com.example.model.VpnState
+import com.example.subscription.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,9 +29,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
-class VpnViewModel(application: Application) : AndroidViewModel(application) {
+class VpnViewModel @JvmOverloads constructor(
+    application: Application,
+    private val subscriptionProvider: SubscriptionProvider = H1SubscriptionClient()
+) : AndroidViewModel(application) {
 
     private val repository: VpnRepository
 
@@ -40,31 +47,14 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     val sessions: StateFlow<List<VpnSession>> = repository.sessions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _vpnState = MutableStateFlow(VpnState.DISCONNECTED)
+    private val _vpnState = VellorVpnService.connectionState
     val vpnState: StateFlow<VpnState> = _vpnState.asStateFlow()
 
-    private val _selectedServer = MutableStateFlow(
-        ServerLocation(
-            id = "srv_h1_de",
-            country = "Germany",
-            countryCode = "DE",
-            city = "Frankfurt",
-            cityCode = "FRA",
-            flagEmoji = "🇩🇪",
-            pingMs = 24,
-            loadPercent = 12,
-            ipAddress = "179.254.127.97",
-            vlessUrl = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@de1.h1cloud.net:25562?type=tcp&security=reality&sni=www.samsung.com&fp=chrome&pbk=IaWM7egEriDsIBixWjUN1i5FWBpOhVfVRBa2edgR9HI&sid=3758385544d9dc53&spx=%2F&encryption=none#Vellor%20DE%20-%20H1Cloud",
-            isLiveServer = true,
-            isP2p = true,
-            isStreaming = true,
-            isStealth = true,
-            isFavorite = true
-        )
-    )
+    private val emptyServer = ServerLocation("inactive", "Vellor", "", "Активируйте подписку", "VPN", "🌐", 0, 0, "")
+    private val _selectedServer = MutableStateFlow(emptyServer)
     val selectedServer: StateFlow<ServerLocation> = _selectedServer.asStateFlow()
 
-    private val _protocol = MutableStateFlow(VpnProtocol.WIREGUARD)
+    private val _protocol = MutableStateFlow(VpnProtocol.VELLOR_STEALTH)
     val protocol: StateFlow<VpnProtocol> = _protocol.asStateFlow()
 
     private val _inspectingServer = MutableStateFlow<ServerLocation?>(null)
@@ -79,23 +69,23 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     private val _durationSeconds = MutableStateFlow(0L)
     val durationSeconds: StateFlow<Long> = _durationSeconds.asStateFlow()
 
-    private val _pingMs = MutableStateFlow(18)
+    private val _pingMs = MutableStateFlow(0)
     val pingMs: StateFlow<Int> = _pingMs.asStateFlow()
 
     private val _speedHistory = MutableStateFlow<List<Float>>(listOf(0f))
     val speedHistory: StateFlow<List<Float>> = _speedHistory.asStateFlow()
 
     // Security Toggles
-    private val _killSwitch = MutableStateFlow(true)
+    private val _killSwitch = MutableStateFlow(false)
     val killSwitch: StateFlow<Boolean> = _killSwitch.asStateFlow()
 
-    private val _stealth = MutableStateFlow(false)
+    private val _stealth = MutableStateFlow(true)
     val stealth: StateFlow<Boolean> = _stealth.asStateFlow()
 
     private val _doubleHop = MutableStateFlow(false)
     val doubleHop: StateFlow<Boolean> = _doubleHop.asStateFlow()
 
-    private val _adBlock = MutableStateFlow(true)
+    private val _adBlock = MutableStateFlow(false)
     val adBlock: StateFlow<Boolean> = _adBlock.asStateFlow()
 
     private val prefs = application.getSharedPreferences("vellor_prefs", Context.MODE_PRIVATE)
@@ -121,7 +111,7 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
 
     // User Profile & Registration
     private val _username = MutableStateFlow(
-        prefs.getString("user_username", "Sovereign Operator") ?: "Sovereign Operator"
+        prefs.getString("user_username", "user") ?: "user"
     )
     val username: StateFlow<String> = _username.asStateFlow()
 
@@ -131,48 +121,74 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     val userEmail: StateFlow<String> = _userEmail.asStateFlow()
 
     private val _sovereignId = MutableStateFlow(
-        prefs.getString("sovereign_id", null) ?: run {
-            val gen = "VLR-" + (1000..9999).random() + "-VIP"
+        prefs.getString("sovereign_id", null)?.takeIf { !it.contains("-VIP") } ?: run {
+            val gen = "UID: #" + (100000..999999).random().toString(16).uppercase()
             prefs.edit().putString("sovereign_id", gen).apply()
             gen
         }
     )
     val sovereignId: StateFlow<String> = _sovereignId.asStateFlow()
 
+    private val _avatarIndex = MutableStateFlow(
+        prefs.getInt("user_avatar_index", 0)
+    )
+    val avatarIndex: StateFlow<Int> = _avatarIndex.asStateFlow()
+
+    private val _customAvatarPath = MutableStateFlow<String?>(
+        prefs.getString("user_custom_avatar_path", null)
+    )
+    val customAvatarPath: StateFlow<String?> = _customAvatarPath.asStateFlow()
+
+    fun setAvatarIndex(index: Int) {
+        _avatarIndex.value = index
+        _customAvatarPath.value = null
+        prefs.edit().putInt("user_avatar_index", index)
+            .remove("user_custom_avatar_path").apply()
+    }
+
+    fun setCustomAvatar(context: android.content.Context, uri: android.net.Uri) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val avatarFile = java.io.File(context.filesDir, "custom_avatar.png")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    avatarFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                _customAvatarPath.value = avatarFile.absolutePath
+                prefs.edit().putString("user_custom_avatar_path", avatarFile.absolutePath).apply()
+            } catch (e: Exception) {
+                android.util.Log.e("Vellor", "Failed to save avatar from gallery", e)
+            }
+        }
+    }
+
+    fun clearCustomAvatar() {
+        _customAvatarPath.value = null
+        prefs.edit().remove("user_custom_avatar_path").apply()
+    }
+
     private val _isRegistered = MutableStateFlow(
         prefs.getBoolean("user_is_registered", false)
     )
     val isRegistered: StateFlow<Boolean> = _isRegistered.asStateFlow()
 
-    // Access Key & Lifetime Subscription System - Default active so all features work immediately
-    private val _isActivated = MutableStateFlow(true)
-    val isActivated: StateFlow<Boolean> = _isActivated.asStateFlow()
-
-    private val _activatedKey = MutableStateFlow(
-        prefs.getString("activated_key", "H1CLOUD-2026") ?: "H1CLOUD-2026"
-    )
-    val activatedKey: StateFlow<String> = _activatedKey.asStateFlow()
-
+    private val accessStorage = SubscriptionStorage(application)
+    private val _isActivated = MutableStateFlow(false)
+    val isActivated = _isActivated.asStateFlow()
+    private val _activatedKey = MutableStateFlow("")
+    val activatedKey = _activatedKey.asStateFlow()
+    private val _subscription = MutableStateFlow<Subscription?>(null)
+    val subscription = _subscription.asStateFlow()
+    private val _activationBusy = MutableStateFlow(false)
+    val activationBusy = _activationBusy.asStateFlow()
     private val _showActivationDialog = MutableStateFlow(false)
-    val showActivationDialog: StateFlow<Boolean> = _showActivationDialog.asStateFlow()
-
+    val showActivationDialog = _showActivationDialog.asStateFlow()
     private val _activationError = MutableStateFlow<String?>(null)
-    val activationError: StateFlow<String?> = _activationError.asStateFlow()
-
-    companion object {
-        val VALID_ACTIVATION_KEYS = setOf(
-            "VELLOR-VIP",
-            "SOVEREIGN-2026",
-            "INFINITY-PASS",
-            "VELLOR-PRO",
-            "LIFETIME-ACCESS",
-            "H1CLOUD-2026",
-            "H1CLOUD-PRO",
-            "H1CLOUD",
-            "DE1-H1CLOUD",
-            "D5774C44F0DE49D0989BE60739A239CCAB8F09C97DB346B49027DB2FC7C13DF7"
-        )
-    }
+    val activationError = _activationError.asStateFlow()
+    private var activationJob: Job? = null
+    private var connectJob: Job? = null
+    private var accessMonitorJob: Job? = null
 
     private var timerJob: Job? = null
     private var telemetryJob: Job? = null
@@ -200,17 +216,59 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
         _vpnPermissionIntent.value = null
     }
 
+    val connectionError = VellorVpnService.errorMessage.asStateFlow()
+
+    val connectionFailed: StateFlow<Boolean> = VellorVpnService.connectionFailed.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _vpnState.collect { state ->
+                if (state == VpnState.CONNECTED) {
+                    connectionStartTime = VellorVpnService.telemetry.value.startedAt
+                    _durationSeconds.value = 0L
+                    totalBytesDownloadedSession = 0L
+                    totalBytesUploadedSession = 0L
+                    startTelemetry()
+                    monitorAccess()
+                } else {
+                    stopTelemetry()
+                    accessMonitorJob?.cancel()
+                }
+            }
+        }
+    }
+
+    init {
+        // Migrate away from the old, local-only activation flag and embedded administrator key.
+        prefs.edit().remove("activated_key").remove("is_activated").apply()
+        if (accessStorage.key.isNotBlank()) activateKey(accessStorage.key, restoring = true)
+    }
+
+    fun clearConnectionFailure() {
+        VellorVpnService.errorMessage.value = ""
+        VellorVpnService.connectionFailed.value = false
+    }
+
     fun onVpnPermissionGranted() {
         startConnectService()
     }
 
     fun onVpnPermissionDenied() {
+        _vpnPermissionIntent.value = null
         _vpnState.value = VpnState.DISCONNECTED
+    }
+
+    fun onVpnPermissionFailed() {
+        onVpnPermissionDenied()
+        VellorVpnService.connectionFailed.value = true
     }
 
     fun toggleConnect() {
         when (_vpnState.value) {
             VpnState.DISCONNECTED -> {
+                if (!_isActivated.value) { openActivationDialog(); return }
+                if (_vpnPermissionIntent.value != null || _activationBusy.value) return
+                clearConnectionFailure()
                 try {
                     val prepareIntent = VpnService.prepare(getApplication())
                     if (prepareIntent != null) {
@@ -218,75 +276,89 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
                     } else {
                         startConnectService()
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    startConnectService()
+                } catch (error: Exception) {
+                    Log.e("Vellor", "Could not request VPN permission", error)
+                    onVpnPermissionFailed()
                 }
             }
             VpnState.CONNECTED, VpnState.CONNECTING -> startDisconnectService()
-            VpnState.DISCONNECTING -> {}
+            VpnState.DISCONNECTING -> Unit
         }
     }
 
     private fun startConnectService() {
-        viewModelScope.launch {
-            _vpnState.value = VpnState.CONNECTING
-            vibrate(50)
+        if (!_isActivated.value || _activatedKey.value.isBlank()) { openActivationDialog(); return }
+        if (connectJob?.isActive == true) return
+        clearConnectionFailure()
+        _vpnState.value = VpnState.CONNECTING
+        connectJob = viewModelScope.launch {
             try {
-                val intent = Intent(getApplication(), com.example.service.VellorVpnService::class.java).apply {
-                    action = com.example.service.VellorVpnService.ACTION_CONNECT
-                    putExtra(com.example.service.VellorVpnService.EXTRA_SERVER_NAME, _selectedServer.value.fullName)
-                    putExtra(com.example.service.VellorVpnService.EXTRA_SERVER_IP, _selectedServer.value.ipAddress)
+                check(VpnService.prepare(getApplication()) == null)
+                val fresh = subscriptionProvider.load(_activatedKey.value, accessStorage.deviceId)
+                ensureActive()
+                fresh.requireUsable()
+                applySubscription(fresh)
+                val intent = Intent(getApplication(), VellorVpnService::class.java).apply {
+                    action = VellorVpnService.ACTION_CONNECT
+                    putExtra(VellorVpnService.EXTRA_SERVER_NAME, _selectedServer.value.fullName)
+                    putExtra(VellorVpnService.EXTRA_VLESS_URL, _selectedServer.value.vlessUrl)
                 }
                 androidx.core.content.ContextCompat.startForegroundService(getApplication(), intent)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                _vpnState.value = VpnState.DISCONNECTED
+                showUnavailable(if (e is SubscriptionException) e.message.orEmpty() else "Не удалось запустить VPN. Проверьте разрешение Android и подключение к интернету.")
             }
-            delay(800)
-            _vpnState.value = VpnState.CONNECTED
-            vibratePattern()
-            connectionStartTime = System.currentTimeMillis()
-            totalBytesDownloadedSession = 0L
-            totalBytesUploadedSession = 0L
-            startTelemetry()
         }
     }
 
     private fun startDisconnectService() {
-        viewModelScope.launch {
-            _vpnState.value = VpnState.DISCONNECTING
-            vibrate(40)
-            try {
-                val intent = Intent(getApplication(), com.example.service.VellorVpnService::class.java).apply {
-                    action = com.example.service.VellorVpnService.ACTION_DISCONNECT
-                }
-                getApplication<Application>().startService(intent)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            stopTelemetry()
-            delay(400)
-            _vpnState.value = VpnState.DISCONNECTED
-
-            val duration = _durationSeconds.value
-            if (duration > 0 && connectionStartTime > 0) {
-                repository.saveSession(
-                    VpnSession(
-                        serverName = _selectedServer.value.fullName,
-                        country = _selectedServer.value.country,
-                        city = _selectedServer.value.city,
-                        flagEmoji = _selectedServer.value.flagEmoji,
-                        protocol = _protocol.value.displayName,
-                        startTimeMillis = connectionStartTime,
-                        durationSeconds = duration,
-                        bytesDownloaded = totalBytesDownloadedSession,
-                        bytesUploaded = totalBytesUploadedSession
+        connectJob?.cancel()
+        connectJob = null
+        accessMonitorJob?.cancel()
+        val duration = _durationSeconds.value
+        val server = _selectedServer.value
+        val protocol = _protocol.value
+        val startedAt = connectionStartTime
+        val downloaded = totalBytesDownloadedSession
+        val uploaded = totalBytesUploadedSession
+        _vpnState.value = VpnState.DISCONNECTING
+        try {
+            // Android binds an established VpnService. stopService alone cannot
+            // destroy it while TUN is open, so ask the service to close TUN first.
+            getApplication<Application>().startService(
+                Intent(getApplication(), VellorVpnService::class.java)
+                    .setAction(VellorVpnService.ACTION_DISCONNECT)
+            )
+        } catch (error: Exception) {
+            Log.e("Vellor", "Could not stop VPN service", error)
+            _vpnState.value = if (VellorVpnService.isRunning) VpnState.CONNECTED else VpnState.DISCONNECTED
+            VellorVpnService.connectionFailed.value = true
+            return
+        }
+        stopTelemetry()
+        _durationSeconds.value = 0L
+        if (!VellorVpnService.isRunning) _vpnState.value = VpnState.DISCONNECTED
+        if (duration > 0 && startedAt > 0) {
+            viewModelScope.launch {
+                try {
+                    repository.saveSession(
+                        VpnSession(
+                            serverName = server.fullName,
+                            country = server.country,
+                            city = server.city,
+                            flagEmoji = server.flagEmoji,
+                            protocol = protocol.displayName,
+                            startTimeMillis = startedAt,
+                            durationSeconds = duration,
+                            bytesDownloaded = downloaded,
+                            bytesUploaded = uploaded
+                        )
                     )
-                )
+                } catch (error: Exception) {
+                    Log.e("Vellor", "Could not save session history", error)
+                }
             }
-            _downloadSpeedMb.value = 0f
-            _uploadSpeedMb.value = 0f
-            _durationSeconds.value = 0L
         }
     }
 
@@ -302,26 +374,13 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
         telemetryJob?.cancel()
         telemetryJob = viewModelScope.launch {
             val history = mutableListOf<Float>()
-            while (_vpnState.value == VpnState.CONNECTED) {
-                delay(1200)
-                val jitter = Random.nextFloat() * 12f - 6f
-                val baseDown = when (_protocol.value) {
-                    VpnProtocol.WIREGUARD -> 142f
-                    VpnProtocol.IKEV2 -> 98f
-                    VpnProtocol.OPENVPN_UDP -> 68f
-                    VpnProtocol.VELLOR_STEALTH -> 88f
-                }
-                val currentDown = (baseDown + jitter).coerceIn(12f, 320f)
-                val currentUp = (currentDown * 0.45f + (Random.nextFloat() * 8f - 4f)).coerceIn(5f, 160f)
-
-                _downloadSpeedMb.value = currentDown
-                _uploadSpeedMb.value = currentUp
-                _pingMs.value = (_selectedServer.value.pingMs + Random.nextInt(-2, 4)).coerceAtLeast(4)
-
-                totalBytesDownloadedSession += (currentDown * 1024 * 1024 * 1.2f).toLong()
-                totalBytesUploadedSession += (currentUp * 1024 * 1024 * 1.2f).toLong()
-
-                history.add(currentDown)
+            VellorVpnService.telemetry.collect { sample ->
+                _downloadSpeedMb.value = sample.downloadMbps
+                _uploadSpeedMb.value = sample.uploadMbps
+                _pingMs.value = sample.pingMs
+                totalBytesDownloadedSession = sample.downloaded
+                totalBytesUploadedSession = sample.uploaded
+                history.add(sample.downloadMbps)
                 if (history.size > 20) history.removeAt(0)
                 _speedHistory.value = history.toList()
             }
@@ -336,19 +395,13 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectServer(server: ServerLocation) {
+        if (!_isActivated.value || servers.value.none { it.id == server.id }) return
+        if (_vpnState.value == VpnState.CONNECTING || _vpnState.value == VpnState.DISCONNECTING) return
         val wasConnected = _vpnState.value == VpnState.CONNECTED
         _selectedServer.value = server
+        accessStorage.selectedServerId = server.id
         if (wasConnected) {
-            reconnectTo(server)
-        }
-    }
-
-    private fun reconnectTo(server: ServerLocation) {
-        viewModelScope.launch {
-            _vpnState.value = VpnState.CONNECTING
-            delay(600)
-            _vpnState.value = VpnState.CONNECTED
-            vibrate(40)
+            startConnectService()
         }
     }
 
@@ -357,27 +410,33 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setProtocol(proto: VpnProtocol) {
-        _protocol.value = proto
+        if (proto == VpnProtocol.VELLOR_STEALTH) _protocol.value = proto
+        else showUnavailable("Этот сервер использует VLESS/REALITY. Другие протоколы пока не подключены.")
     }
 
     fun toggleFavorite(serverId: String) {
         repository.toggleFavorite(serverId)
     }
 
+    private fun showUnavailable(message: String) {
+        VellorVpnService.errorMessage.value = message
+        VellorVpnService.connectionFailed.value = true
+    }
+
     fun toggleKillSwitch() {
-        _killSwitch.value = !_killSwitch.value
+        showUnavailable("Для блокировки трафика без VPN включите Always-on VPN и блокировку соединений без VPN в настройках Android.")
     }
 
     fun toggleStealth() {
-        _stealth.value = !_stealth.value
+        showUnavailable("REALITY уже используется этим VLESS-сервером.")
     }
 
     fun toggleDoubleHop() {
-        _doubleHop.value = !_doubleHop.value
+        showUnavailable("Подключение через два сервера пока не реализовано.")
     }
 
     fun toggleAdBlock() {
-        _adBlock.value = !_adBlock.value
+        showUnavailable("Фильтрация рекламы пока не реализована.")
     }
 
     fun toggleDarkTheme() {
@@ -410,46 +469,86 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun activateKey(rawKey: String): Boolean {
-        val trimmed = rawKey.trim().uppercase()
-        val isValid = VALID_ACTIVATION_KEYS.contains(trimmed) ||
-                (trimmed.startsWith("VLR-") && trimmed.length >= 8) ||
-                (trimmed.startsWith("H1-") && trimmed.length >= 6) ||
-                trimmed == "SECRET-KEY"
-
-        if (isValid) {
-            _isActivated.value = true
-            _activatedKey.value = trimmed
-            _activationError.value = null
-            _showActivationDialog.value = false
-            prefs.edit()
-                .putBoolean("is_activated", true)
-                .putString("activated_key", trimmed)
-                .apply()
-            vibrate(60)
-            return true
-        } else {
-            _activationError.value = if (_selectedLanguage.value == com.example.model.AppLanguage.RUSSIAN) {
-                "Недействительный ключ доступа. Проверьте правильность кода."
-            } else {
-                "Invalid access key. Please verify the code."
+    fun activateKey(rawKey: String, restoring: Boolean = false) {
+        if (_activationBusy.value) return
+        if (_vpnState.value != VpnState.DISCONNECTED && !restoring) {
+            _activationError.value = "Отключите VPN перед сменой подписки."
+            return
+        }
+        val key = try { H1Access.normalize(rawKey) } catch (e: SubscriptionException) {
+            _activationError.value = e.message
+            return
+        }
+        _activationBusy.value = true
+        _activationError.value = null
+        activationJob = viewModelScope.launch {
+            try {
+                val fresh = subscriptionProvider.load(key, accessStorage.deviceId)
+                ensureActive()
+                fresh.requireUsable()
+                if (restoring && _vpnState.value == VpnState.CONNECTED && fresh.servers.none { it.id == accessStorage.selectedServerId }) {
+                    startDisconnectService()
+                    showUnavailable("Настройки подписки изменились. Подключитесь заново.")
+                }
+                applySubscription(fresh)
+                accessStorage.key = key
+                _activatedKey.value = key
+                _isActivated.value = true
+                _showActivationDialog.value = false
+                vibrate(60)
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                _activationError.value = if (e is SubscriptionException) e.message else "Не удалось проверить подписку. Повторите попытку."
+                if (restoring && (_vpnState.value == VpnState.CONNECTED || _vpnState.value == VpnState.CONNECTING)) startDisconnectService()
+            } finally {
+                _activationBusy.value = false
             }
-            vibrate(100)
-            return false
+        }
+    }
+
+    private fun applySubscription(fresh: Subscription) {
+        _subscription.value = fresh
+        val selectedId = _selectedServer.value.id.takeUnless { it == "inactive" } ?: accessStorage.selectedServerId
+        repository.replaceServers(fresh.servers)
+        _selectedServer.value = fresh.servers.firstOrNull { it.id == selectedId } ?: fresh.servers.first()
+        accessStorage.selectedServerId = _selectedServer.value.id
+    }
+
+    private fun monitorAccess() {
+        accessMonitorJob?.cancel()
+        accessMonitorJob = viewModelScope.launch {
+            while (_vpnState.value == VpnState.CONNECTED) {
+                delay(60000)
+                try {
+                    val fresh = subscriptionProvider.load(_activatedKey.value, accessStorage.deviceId)
+                    ensureActive()
+                    fresh.requireUsable()
+                    if (fresh.servers.none { it.id == _selectedServer.value.id })
+                        throw SubscriptionException("Настройки подписки изменились. Подключитесь заново.")
+                    _subscription.value = fresh
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    startDisconnectService()
+                    showUnavailable(if (e is SubscriptionException) e.message.orEmpty() else "Не удалось проверить доступ к VPN.")
+                    return@launch
+                }
+            }
         }
     }
 
     fun deactivateKey() {
+        activationJob?.cancel()
+        activationJob = null
+        _activationBusy.value = false
+        _vpnPermissionIntent.value = null
+        if (_vpnState.value == VpnState.CONNECTED || _vpnState.value == VpnState.CONNECTING) startDisconnectService()
         _isActivated.value = false
         _activatedKey.value = ""
+        _subscription.value = null
         _activationError.value = null
-        prefs.edit()
-            .putBoolean("is_activated", false)
-            .putString("activated_key", "")
-            .apply()
-        if (_vpnState.value == VpnState.CONNECTED || _vpnState.value == VpnState.CONNECTING) {
-            startDisconnectService()
-        }
+        accessStorage.key = ""
+        repository.replaceServers(emptyList())
+        _selectedServer.value = emptyServer
     }
 
     fun openActivationDialog() {
@@ -458,6 +557,10 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissActivationDialog() {
         _showActivationDialog.value = false
+        _activationError.value = null
+    }
+
+    fun clearActivationError() {
         _activationError.value = null
     }
 

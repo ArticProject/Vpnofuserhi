@@ -8,62 +8,12 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class VpnRepository(private val dao: VpnSessionDao) {
 
-    private val _servers = MutableStateFlow(
-        listOf(
-            ServerLocation(
-                id = "srv_h1_de",
-                country = "Germany",
-                countryCode = "DE",
-                city = "Frankfurt",
-                cityCode = "FRA",
-                flagEmoji = "🇩🇪",
-                pingMs = 24,
-                loadPercent = 12,
-                ipAddress = "179.254.127.97",
-                vlessUrl = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@de1.h1cloud.net:25562?type=tcp&security=reality&sni=www.samsung.com&fp=chrome&pbk=IaWM7egEriDsIBixWjUN1i5FWBpOhVfVRBa2edgR9HI&sid=3758385544d9dc53&spx=%2F&encryption=none#Vellor%20DE%20-%20H1Cloud",
-                isLiveServer = true,
-                isP2p = true,
-                isStreaming = true,
-                isStealth = true,
-                isFavorite = true
-            ),
-            ServerLocation(
-                id = "srv_es",
-                country = "Spain",
-                countryCode = "ES",
-                city = "Madrid",
-                cityCode = "MAD",
-                flagEmoji = "🇪🇸",
-                pingMs = 28,
-                loadPercent = 19,
-                ipAddress = "185.196.220.14",
-                vlessUrl = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@es1.h1cloud.net:25558?security=reality&encryption=none&pbk=bls7cc5bJGz20-1A_DFdRvs5HT3hs1nAWRqjpk036RY&headerType=none&fp=android&type=tcp&sni=proxy11.h1guro.ovh&sid=f16035de5d48395f#Vellor%20ES%20-%20Madrid",
-                isLiveServer = true,
-                isP2p = true,
-                isStreaming = true,
-                isStealth = true,
-                isFavorite = true
-            ),
-            ServerLocation(
-                id = "srv_pl",
-                country = "Poland",
-                countryCode = "PL",
-                city = "Warsaw",
-                cityCode = "WAW",
-                flagEmoji = "🇵🇱",
-                pingMs = 21,
-                loadPercent = 16,
-                ipAddress = "193.34.212.8",
-                vlessUrl = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@pl1.h1cloud.net:25558?security=reality&encryption=none&pbk=bls7cc5bJGz20-1A_DFdRvs5HT3hs1nAWRqjpk036RY&headerType=none&fp=android&type=tcp&sni=proxy11.h1guro.ovh&sid=f16035de5d48395f#Vellor%20PL%20-%20Warsaw",
-                isLiveServer = true,
-                isP2p = true,
-                isStreaming = true,
-                isStealth = true,
-                isFavorite = true
-            )
-        )
-    )
+    private val _servers = MutableStateFlow<List<ServerLocation>>(emptyList())
     val servers = _servers.asStateFlow()
+
+    fun replaceServers(servers: List<ServerLocation>) {
+        _servers.value = servers
+    }
 
     fun toggleFavorite(serverId: String) {
         _servers.value = _servers.value.map { server ->

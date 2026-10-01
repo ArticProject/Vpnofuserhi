@@ -43,7 +43,7 @@ fun CitySkylineView(
 
             when (server.cityCode) {
                 "ZRH" -> drawZurichLandmarks(w, h)
-                "RKV" -> drawReykjavikLandmarks(w, h)
+                "RKV", "HEL" -> drawReykjavikLandmarks(w, h)
                 "TYO" -> drawTokyoLandmarks(w, h)
                 "AMS" -> drawAmsterdamLandmarks(w, h)
                 "LON" -> drawLondonLandmarks(w, h)

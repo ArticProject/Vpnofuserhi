@@ -3,11 +3,12 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,28 +25,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -61,6 +58,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -68,32 +67,51 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.model.AppLanguage
 import com.example.model.VpnSession
 import com.example.ui.components.bounceClick
-import com.example.ui.theme.DarkSurfaceBorder
-import com.example.ui.theme.DarkSurfaceCard
-import com.example.ui.theme.DarkSurfaceInner
-import com.example.ui.theme.VellorEmerald
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.io.File
+
+data class AvatarOption(
+    val id: Int,
+    val title: String,
+    val icon: ImageVector,
+    val bgColors: List<Color>
+)
+
+val AVATAR_OPTIONS = listOf(
+    AvatarOption(0, "Monogram", Icons.Filled.Person, listOf(Color(0xFF272422), Color(0xFF141210))),
+    AvatarOption(1, "Enclave", Icons.Filled.Security, listOf(Color(0xFF2D2824), Color(0xFF1B1714))),
+    AvatarOption(2, "Cipher Key", Icons.Filled.VpnKey, listOf(Color(0xFF332D27), Color(0xFF1E1A16))),
+    AvatarOption(3, "Telemetry", Icons.Filled.Speed, listOf(Color(0xFF282522), Color(0xFF161412))),
+    AvatarOption(4, "Shield", Icons.Filled.Shield, listOf(Color(0xFF302B26), Color(0xFF1A1714))),
+    AvatarOption(5, "Agent", Icons.Filled.Person, listOf(Color(0xFF262220), Color(0xFF13110F)))
+)
 
 @Composable
 fun ProfileScreen(
     username: String,
     userEmail: String,
     sovereignId: String,
+    avatarIndex: Int = 0,
+    customAvatarPath: String? = null,
     isRegistered: Boolean,
     isActivated: Boolean,
     activatedKey: String,
     activationError: String?,
+    activationBusy: Boolean,
+    subscription: com.example.subscription.Subscription?,
+    activeServerName: String,
     sessions: List<VpnSession>,
-    onActivateKey: (String) -> Boolean,
+    onActivateKey: (String) -> Unit,
     onDeactivateKey: () -> Unit,
     onRegisterUser: (String, String) -> Unit,
+    onSelectAvatar: (Int) -> Unit = {},
+    onPickCustomAvatar: (Uri) -> Unit = {},
     onClearHistory: () -> Unit,
     isDarkTheme: Boolean = false,
     currentLanguage: AppLanguage = AppLanguage.SYSTEM,
@@ -105,48 +123,62 @@ fun ProfileScreen(
 
     var keyInputText by remember { mutableStateOf("") }
     var showRegisterDialog by remember { mutableStateOf(false) }
+    var showAvatarDialog by remember { mutableStateOf(false) }
+    var showKeyInputDialog by remember { mutableStateOf(false) }
 
-    val totalSeconds = sessions.sumOf { it.durationSeconds }
-    val totalHours = totalSeconds / 3600f
-    val totalBytes = sessions.sumOf { it.bytesDownloaded + it.bytesUploaded }
-    val totalGb = totalBytes / (1024f * 1024f * 1024f)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onPickCustomAvatar(uri)
+        }
+    }
+
+    val currentAvatar = AVATAR_OPTIONS.getOrElse(avatarIndex.coerceIn(0, AVATAR_OPTIONS.lastIndex)) { AVATAR_OPTIONS[0] }
+    val hasCustomAvatar = customAvatarPath != null && File(customAvatarPath).exists()
+
+    // Palette: rich warm charcoal/espresso tones (NO GREEN)
+    val cardBg = if (isDarkTheme) Color(0xFF141210) else Color(0xFFFFFFFF)
+    val cardBorder = if (isDarkTheme) Color(0xFF2C2723) else Color(0xFFE5E2DC)
+    val innerBg = if (isDarkTheme) Color(0xFF1D1916) else Color(0xFFF7F5F2)
+    val textPrimary = if (isDarkTheme) Color(0xFFEDE9E5) else Color(0xFF1A1715)
+    val textSecondary = if (isDarkTheme) Color(0xFFA69E96) else Color(0xFF756E67)
+    val accentWarm = if (isDarkTheme) Color(0xFFD6C7B7) else Color(0xFF4A4036)
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Screen Title
+        // 1. Title Header
         item {
-            Column(modifier = Modifier.padding(bottom = 4.dp)) {
+            Column(modifier = Modifier.padding(bottom = 2.dp)) {
                 Text(
-                    text = if (isRu) "Профиль оператора" else "Sovereign Profile",
+                    text = if (isRu) "ПРОФИЛЬ" else "PROFILE",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = accentWarm,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.4.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (isRu) "Суверенный оператор" else "Sovereign Operator",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                    color = textPrimary,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.5).sp
-                )
-                Text(
-                    text = if (isRu) "Управление цифровым суверенитетом и лицензией"
-                    else "Digital sovereign identity & cryptographic access pass",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
                 )
             }
         }
 
-        // 2. User Identity Card (Avatar, Name, ID, Registration status)
+        // 2. User Identity Card (Avatar + Nickname + UID)
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
-                    .background(if (isDarkTheme) DarkSurfaceCard else Color.White)
-                    .border(
-                        1.dp,
-                        if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA),
-                        RoundedCornerShape(22.dp)
-                    )
+                    .background(cardBg)
+                    .border(1.dp, cardBorder, RoundedCornerShape(22.dp))
                     .padding(18.dp)
             ) {
                 Row(
@@ -158,31 +190,41 @@ fun ProfileScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        // Monogram Avatar
+                        // Interactive Avatar (Tap to change from gallery or presets)
                         Box(
                             modifier = Modifier
-                                .size(54.dp)
+                                .size(58.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        colors = if (isDarkTheme) listOf(Color(0xFF27272A), Color(0xFF18181B))
-                                        else listOf(Color(0xFFE5E5EA), Color(0xFFD4D4D8))
-                                    )
-                                )
-                                .border(
-                                    1.2.dp,
-                                    if (isActivated) VellorEmerald else (if (isDarkTheme) DarkSurfaceBorder else Color(0xFFD4D4D8)),
-                                    CircleShape
-                                ),
+                                .background(Brush.linearGradient(currentAvatar.bgColors))
+                                .border(1.2.dp, cardBorder, CircleShape)
+                                .bounceClick(scaleDown = 0.92f) { showAvatarDialog = true },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = username.take(2).uppercase().ifBlank { "SO" },
-                                color = if (isDarkTheme) Color.White else Color(0xFF09090B),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
+                            if (hasCustomAvatar) {
+                                AsyncImage(
+                                    model = File(customAvatarPath!!),
+                                    contentDescription = "Custom User Avatar",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                )
+                            } else if (currentAvatar.id == 0) {
+                                Text(
+                                    text = username.take(2).uppercase().ifBlank { "US" },
+                                    color = textPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = currentAvatar.icon,
+                                    contentDescription = "Avatar",
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
 
                         Column {
@@ -192,546 +234,473 @@ fun ProfileScreen(
                             ) {
                                 Text(
                                     text = username,
-                                    color = if (isDarkTheme) Color.White else Color(0xFF09090B),
-                                    fontSize = 16.sp,
+                                    color = textPrimary,
+                                    fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (isRegistered) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(innerBg)
+                                        .bounceClick(scaleDown = 0.90f) { showRegisterDialog = true }
+                                        .padding(5.dp)
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Filled.CheckCircle,
-                                        contentDescription = "Verified Member",
-                                        tint = VellorEmerald,
-                                        modifier = Modifier.size(15.dp)
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = "Edit Name",
+                                        tint = textSecondary,
+                                        modifier = Modifier.size(13.dp)
                                     )
                                 }
                             }
 
-                            // Sovereign ID badge (clickable to copy)
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Clean Unique UID badge (Tap to copy)
                             Row(
                                 modifier = Modifier
-                                    .padding(top = 4.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isDarkTheme) DarkSurfaceInner else Color(0xFFF4F4F6))
+                                    .background(innerBg)
                                     .bounceClick(scaleDown = 0.95f) {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("Sovereign ID", sovereignId))
-                                        Toast.makeText(context, if (isRu) "ID скопирован в буфер" else "ID copied to clipboard", Toast.LENGTH_SHORT).show()
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("UID", sovereignId))
+                                        Toast.makeText(context, if (isRu) "UID скопирован" else "UID copied", Toast.LENGTH_SHORT).show()
                                     }
-                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    .padding(horizontal = 9.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = sovereignId,
-                                    color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
+                                    color = textSecondary,
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.Medium
                                 )
                                 Icon(
                                     imageVector = Icons.Filled.ContentCopy,
-                                    contentDescription = "Copy ID",
-                                    tint = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
-                                    modifier = Modifier.size(12.dp)
+                                    contentDescription = "Copy UID",
+                                    tint = textSecondary,
+                                    modifier = Modifier.size(11.dp)
                                 )
                             }
                         }
                     }
 
-                    // Edit profile button
+                    // Avatar badge button
                     Box(
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .background(if (isDarkTheme) DarkSurfaceInner else Color(0xFFF4F4F6))
-                            .border(1.dp, if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA), CircleShape)
-                            .bounceClick(scaleDown = 0.90f) { showRegisterDialog = true }
-                            .padding(9.dp),
-                        contentAlignment = Alignment.Center
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(innerBg)
+                            .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                            .bounceClick(scaleDown = 0.92f) { showAvatarDialog = true }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = "Edit Profile",
-                            tint = if (isDarkTheme) Color.White else Color(0xFF09090B),
-                            modifier = Modifier.size(16.dp)
+                        Text(
+                            text = if (isRu) "Аватар" else "Avatar",
+                            color = textSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
             }
         }
 
-        // 3. KEY ACTIVATION & SUBSCRIPTION HERO CARD
-        item {
-            if (isActivated) {
-                // Activated Card: Lifetime Full Access
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(if (isDarkTheme) Color(0xFF0D1612) else Color(0xFFF0FDF4))
-                        .border(1.2.dp, VellorEmerald.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(VellorEmerald.copy(alpha = 0.15f))
-                                    .border(1.dp, VellorEmerald.copy(alpha = 0.4f), CircleShape)
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(VellorEmerald)
-                                    )
-                                    Text(
-                                        text = if (isRu) "АКТИВЕН · БЕЗЛИМИТ" else "LIFETIME ACCESS · ACTIVE",
-                                        color = VellorEmerald,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    )
-                                }
-                            }
-
-                            Icon(
-                                imageVector = Icons.Filled.LockOpen,
-                                contentDescription = null,
-                                tint = VellorEmerald,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Column {
-                            Text(
-                                text = if (isRu) "Полный суверенный доступ" else "Full Sovereign Lifetime Pass",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = if (isDarkTheme) Color.White else Color(0xFF065F46),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 19.sp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = if (isRu) "Все серверы 10 Gbps разблокированы без ограничений"
-                                else "All high-speed 10 Gbps nodes unmetered and unlocked",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF047857),
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        // Subscription Details Grid
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (isDarkTheme) Color(0xFF080C0A) else Color.White.copy(alpha = 0.8f))
-                                .border(0.8.dp, if (isDarkTheme) Color(0xFF1E2E25) else Color(0xFFBBF7D0), RoundedCornerShape(14.dp))
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ProfileDetailRow(
-                                label = if (isRu) "Срок действия" else "Validity Period",
-                                value = if (isRu) "Навсегда (Бессрочно)" else "Lifetime (No Expiry)",
-                                valueColor = VellorEmerald,
-                                isDarkTheme = isDarkTheme
-                            )
-                            ProfileDetailRow(
-                                label = if (isRu) "Ключ лицензии" else "Active License Key",
-                                value = activatedKey.ifBlank { "SOVEREIGN-KEY" },
-                                isMonospace = true,
-                                isDarkTheme = isDarkTheme
-                            )
-                            ProfileDetailRow(
-                                label = if (isRu) "Скорость туннеля" else "Tunnel Bandwidth",
-                                value = "10 Gbps WireGuard Dedicated",
-                                isDarkTheme = isDarkTheme
-                            )
-                            ProfileDetailRow(
-                                label = if (isRu) "Лимит устройств" else "Connected Devices",
-                                value = if (isRu) "До 5 устройств" else "Up to 5 devices",
-                                isDarkTheme = isDarkTheme
-                            )
-                            ProfileDetailRow(
-                                label = if (isRu) "Активный узел" else "Active Node",
-                                value = "🇩🇪 Germany (de1.h1cloud.net)",
-                                isDarkTheme = isDarkTheme
-                            )
-                        }
-
-                        // Copy VLESS Key button
-                        val vlessKey = "vless://e1b667c1-2438-471a-b1cd-9ba90d557e9d@de1.h1cloud.net:25558?security=reality&encryption=none&pbk=bls7cc5bJGz20-1A_DFdRvs5HT3hs1nAWRqjpk036RY&headerType=none&fp=android&type=tcp&sni=proxy11.h1guro.ovh&sid=f16035de5d48395f#Vellor%20Germany%201"
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(VellorEmerald.copy(alpha = 0.15f))
-                                .border(1.dp, VellorEmerald.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                .bounceClick(scaleDown = 0.96f) {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("VLESS Key", vlessKey))
-                                    Toast.makeText(context, if (isRu) "VLESS ключ скопирован в буфер!" else "VLESS key copied to clipboard!", Toast.LENGTH_SHORT).show()
-                                }
-                                .padding(vertical = 10.dp, horizontal = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.ContentCopy,
-                                    contentDescription = "Copy VLESS Key",
-                                    tint = VellorEmerald,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = if (isRu) "Скопировать боевой VLESS Reality ключ" else "Copy Active VLESS Reality Key",
-                                    color = VellorEmerald,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // Revoke / Change Key
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Text(
-                                text = if (isRu) "Отозвать или сменить ключ" else "Revoke or change key",
-                                color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF64748B),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier
-                                    .bounceClick(scaleDown = 0.96f) { onDeactivateKey() }
-                                    .padding(vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-            } else {
-                // Inactive Card: Key Input Required
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(if (isDarkTheme) DarkSurfaceCard else Color.White)
-                        .border(1.2.dp, if (isDarkTheme) Color(0xFF3F3F46) else Color(0xFFE5E5EA), RoundedCornerShape(22.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFEF4444).copy(alpha = 0.12f))
-                                    .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.35f), CircleShape)
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFEF4444))
-                                    )
-                                    Text(
-                                        text = if (isRu) "ТРЕБУЕТСЯ АКТИВАЦИЯ" else "KEY ACTIVATION REQUIRED",
-                                        color = Color(0xFFEF4444),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    )
-                                }
-                            }
-
-                            Icon(
-                                imageVector = Icons.Filled.Lock,
-                                contentDescription = null,
-                                tint = Color(0xFFEF4444),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Column {
-                            Text(
-                                text = if (isRu) "Активируйте ключ доступа" else "Enter Sovereign Access Key",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = if (isDarkTheme) Color.White else Color(0xFF09090B),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = if (isRu)
-                                    "Для запуска WireGuard туннелей введите персональный код подписки."
-                                else
-                                    "Enter your cryptographic subscription key to unlock sovereign routing nodes.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
-                                fontSize = 13.sp
-                            )
-                        }
-
-                        // Key Input Field
-                        OutlinedTextField(
-                            value = keyInputText,
-                            onValueChange = { keyInputText = it.uppercase() },
-                            placeholder = {
-                                Text(
-                                    text = if (isRu) "Например: VELLOR-VIP" else "e.g. VELLOR-VIP",
-                                    color = if (isDarkTheme) Color(0xFF52525B) else Color(0xFFA1A1AA),
-                                    fontSize = 14.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Filled.VpnKey,
-                                    contentDescription = null,
-                                    tint = if (isDarkTheme) Color.White else Color(0xFF09090B),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            singleLine = true,
-                            isError = activationError != null,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = if (isDarkTheme) Color.White else Color(0xFF09090B),
-                                unfocusedBorderColor = if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA),
-                                focusedContainerColor = if (isDarkTheme) DarkSurfaceInner else Color(0xFFF9F9FB),
-                                unfocusedContainerColor = if (isDarkTheme) DarkSurfaceInner else Color(0xFFF9F9FB),
-                                errorBorderColor = Color(0xFFEF4444)
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Characters,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    keyboardController?.hide()
-                                    if (keyInputText.isNotBlank()) {
-                                        onActivateKey(keyInputText)
-                                    }
-                                }
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("access_key_input")
-                        )
-
-                        // Error message display
-                        if (activationError != null) {
-                            Text(
-                                text = activationError,
-                                color = Color(0xFFEF4444),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-
-                        // Activate Button
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .clip(RoundedCornerShape(25.dp))
-                                .background(if (isDarkTheme) Color.White else Color(0xFF09090B))
-                                .bounceClick(scaleDown = 0.95f) {
-                                    keyboardController?.hide()
-                                    if (keyInputText.isNotBlank()) {
-                                        onActivateKey(keyInputText)
-                                    }
-                                }
-                                .testTag("activate_key_button"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Key,
-                                    contentDescription = null,
-                                    tint = if (isDarkTheme) Color(0xFF09090B) else Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = if (isRu) "Активировать доступ" else "Activate Sovereign Pass",
-                                    color = if (isDarkTheme) Color(0xFF09090B) else Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // Clickable Test Key Pills
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = if (isRu) "Быстрые ключи для активации (нажмите для вставки):"
-                                else "Available trial keys (tap to fill):",
-                                fontSize = 11.sp,
-                                color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                listOf("H1CLOUD-2026", "VELLOR-VIP", "SOVEREIGN-2026", "LIFETIME-ACCESS").forEach { testKey ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isDarkTheme) DarkSurfaceInner else Color(0xFFF4F4F6))
-                                            .border(0.8.dp, if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA), RoundedCornerShape(8.dp))
-                                            .bounceClick(scaleDown = 0.94f) {
-                                                keyInputText = testKey
-                                                onActivateKey(testKey)
-                                            }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = testKey,
-                                            fontSize = 10.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isDarkTheme) Color.White else Color(0xFF09090B)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Lifetime Usage Telemetry Summary
+        // 3. Compact Key / Subscription Window (NO GREEN, Warm Dark/White)
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(if (isDarkTheme) DarkSurfaceCard else Color.White)
-                    .border(
-                        1.dp,
-                        if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA),
-                        RoundedCornerShape(22.dp)
-                    )
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(cardBg)
+                    .border(1.dp, cardBorder, RoundedCornerShape(20.dp))
                     .padding(18.dp)
             ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(innerBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.VpnKey,
+                                    contentDescription = null,
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            Text(
+                                text = if (isRu) "КЛЮЧ ДОСТУПА" else "ACCESS KEY",
+                                color = textPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.1.sp
+                            )
+                        }
+
+                        // Status Pill (Monochrome)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(innerBg)
+                                .border(0.8.dp, cardBorder, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = if (isActivated) {
+                                    if (isRu) "АКТИВЕН" else "ACTIVE"
+                                } else {
+                                    if (isRu) "НЕ АКТИВЕН" else "INACTIVE"
+                                },
+                                color = if (isActivated) textPrimary else textSecondary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
+                    }
+
+                    // Key info block
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(innerBg)
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = if (isRu) "Текущий профиль" else "Active Profile",
+                                    fontSize = 11.sp,
+                                    color = textSecondary
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isActivated) {
+                                        if (activatedKey == "TEST") "H1Cloud Trial" else "VLESS Reality · $activeServerName"
+                                    } else {
+                                        if (isRu) "Требуется ввод ключа" else "Key required"
+                                    },
+                                    color = textPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Text(
+                                text = if (isActivated) {
+                                    if (isRu) "Сменить" else "Change"
+                                } else {
+                                    if (isRu) "Ввести" else "Enter"
+                                },
+                                color = accentWarm,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .bounceClick(scaleDown = 0.94f) { showKeyInputDialog = true }
+                                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Developer / Creator Card ("Делал: @23")
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(cardBg)
+                    .border(1.dp, cardBorder, RoundedCornerShape(18.dp))
+                    .padding(horizontal = 18.dp, vertical = 14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = if (isRu) "АВТОРСТВО" else "AUTHORSHIP",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textSecondary,
+                            letterSpacing = 1.1.sp
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = "Делал: @23",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textPrimary
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(innerBg)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = "@23",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = accentWarm
+                        )
+                    }
+                }
+            }
+        }
+
+        // 5. Aesthetic Editorial Footer (3 lines in English, subtle typography)
+        item {
+            Spacer(modifier = Modifier.height(18.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "MINIMAL SOVEREIGN TUNNEL ROUTING",
+                    color = textSecondary.copy(alpha = 0.55f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.4.sp,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "END-TO-END CRYPTOGRAPHIC ENCLAVE",
+                    color = textSecondary.copy(alpha = 0.55f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.4.sp,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "DEVELOPED FOR PRIVATE CITIZENS",
+                    color = textSecondary.copy(alpha = 0.55f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.4.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+
+    // Avatar Selection Dialog (with Gallery button + presets)
+    if (showAvatarDialog) {
+        AlertDialog(
+            onDismissRequest = { showAvatarDialog = false },
+            title = {
+                Text(
+                    text = if (isRu) "Аватар профиля" else "Profile Avatar",
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+            },
+            text = {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    // Pick from gallery action
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(innerBg)
+                            .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+                            .bounceClick(scaleDown = 0.95f) {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                                showAvatarDialog = false
+                            }
+                            .padding(vertical = 13.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PhotoLibrary,
+                                contentDescription = null,
+                                tint = textPrimary,
+                                modifier = Modifier.size(19.dp)
+                            )
+                            Text(
+                                text = if (isRu) "Выбрать из галереи" else "Choose from gallery",
+                                color = textPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
                     Text(
-                        text = if (isRu) "Статистика туннеля" else "Tunnel Telemetry",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (isDarkTheme) Color.White else Color(0xFF09090B),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
+                        text = if (isRu) "Или выберите минималистичный стиль:" else "Or choose minimalist preset:",
+                        fontSize = 12.sp,
+                        color = textSecondary
                     )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        ProfileMetricBlock(
-                            label = if (isRu) "Трафик" else "Data Saved",
-                            value = String.format("%.2f GB", totalGb),
-                            isDarkTheme = isDarkTheme,
-                            modifier = Modifier.weight(1f)
-                        )
-                        ProfileMetricBlock(
-                            label = if (isRu) "Время защиты" else "Protected Time",
-                            value = String.format("%.1f ч", totalHours),
-                            isDarkTheme = isDarkTheme,
-                            modifier = Modifier.weight(1f)
-                        )
-                        ProfileMetricBlock(
-                            label = if (isRu) "Сессий" else "Sessions",
-                            value = "${sessions.size}",
-                            isDarkTheme = isDarkTheme,
-                            modifier = Modifier.weight(1f)
-                        )
+                        AVATAR_OPTIONS.take(3).forEach { opt ->
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(Brush.linearGradient(opt.bgColors))
+                                    .border(
+                                        if (opt.id == avatarIndex && !hasCustomAvatar) 2.dp else 1.dp,
+                                        if (opt.id == avatarIndex && !hasCustomAvatar) textPrimary else cardBorder,
+                                        CircleShape
+                                    )
+                                    .bounceClick(scaleDown = 0.90f) {
+                                        onSelectAvatar(opt.id)
+                                        showAvatarDialog = false
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (opt.id == 0) {
+                                    Text(
+                                        text = username.take(2).uppercase().ifBlank { "US" },
+                                        color = textPrimary,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = opt.icon,
+                                        contentDescription = opt.title,
+                                        tint = textPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        AVATAR_OPTIONS.drop(3).forEach { opt ->
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(Brush.linearGradient(opt.bgColors))
+                                    .border(
+                                        if (opt.id == avatarIndex && !hasCustomAvatar) 2.dp else 1.dp,
+                                        if (opt.id == avatarIndex && !hasCustomAvatar) textPrimary else cardBorder,
+                                        CircleShape
+                                    )
+                                    .bounceClick(scaleDown = 0.90f) {
+                                        onSelectAvatar(opt.id)
+                                        showAvatarDialog = false
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = opt.icon,
+                                    contentDescription = opt.title,
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
                     }
                 }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAvatarDialog = false }) {
+                    Text(if (isRu) "Закрыть" else "Close", color = textPrimary)
+                }
             }
-        }
+        )
+    }
 
-        // 5. Recent Sessions Log (Integrated from previous Logs tab)
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+    // Key Input Dialog
+    if (showKeyInputDialog) {
+        var tempKey by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showKeyInputDialog = false },
+            title = {
                 Text(
-                    text = if (isRu) "Журнал подключений" else "Session History",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+                    text = if (isRu) "Ввод ключа доступа" else "Access Key Input",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    color = textPrimary
                 )
-
-                if (sessions.isNotEmpty()) {
-                    IconButton(
-                        onClick = onClearHistory,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.DeleteOutline,
-                            contentDescription = "Clear History",
-                            tint = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
-                            modifier = Modifier.size(18.dp)
-                        )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = if (isRu) "Вставьте VLESS-код или ссылку подписки:" else "Paste VLESS code or subscription URL:",
+                        fontSize = 13.sp,
+                        color = textSecondary
+                    )
+                    OutlinedTextField(
+                        value = tempKey,
+                        onValueChange = { tempKey = it },
+                        placeholder = { Text("vless://...", fontSize = 13.sp) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (isActivated) {
+                        TextButton(
+                            onClick = {
+                                onDeactivateKey()
+                                showKeyInputDialog = false
+                            }
+                        ) {
+                            Text(if (isRu) "Отключить текущий ключ" else "Sign out of key", color = Color(0xFFEF4444), fontSize = 12.sp)
+                        }
                     }
                 }
-            }
-        }
-
-        if (sessions.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isDarkTheme) DarkSurfaceCard else Color.White)
-                        .border(1.dp, if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA), RoundedCornerShape(16.dp))
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (tempKey.isNotBlank()) {
+                            onActivateKey(tempKey.trim())
+                            showKeyInputDialog = false
+                        }
+                    }
                 ) {
-                    Text(
-                        text = if (isRu) "История подключений пока пуста" else "No encrypted sessions recorded yet",
-                        color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
-                        fontSize = 13.sp
-                    )
+                    Text(if (isRu) "Применить" else "Apply", fontWeight = FontWeight.Bold, color = textPrimary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showKeyInputDialog = false }) {
+                    Text(if (isRu) "Отмена" else "Cancel", color = textSecondary)
                 }
             }
-        } else {
-            items(sessions.take(10)) { session ->
-                SessionHistoryItemCard(
-                    session = session,
-                    isDarkTheme = isDarkTheme,
-                    isRu = isRu
-                )
-            }
-        }
+        )
     }
 
     // Registration / Edit Profile Dialog
@@ -743,30 +712,22 @@ fun ProfileScreen(
             onDismissRequest = { showRegisterDialog = false },
             title = {
                 Text(
-                    text = if (isRu) "Профиль пользователя" else "Operator Profile",
+                    text = if (isRu) "Имя оператора" else "Operator Name",
                     fontWeight = FontWeight.Bold,
-                    color = if (isDarkTheme) Color.White else Color(0xFF09090B)
+                    color = textPrimary
                 )
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = if (isRu) "Укажите имя для идентификации в суверенной сети:"
-                        else "Enter your moniker for sovereign network routing:",
+                        text = if (isRu) "Укажите имя профиля:" else "Enter profile moniker:",
                         fontSize = 13.sp,
-                        color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
+                        color = textSecondary
                     )
                     OutlinedTextField(
                         value = tempName,
                         onValueChange = { tempName = it },
-                        label = { Text(if (isRu) "Имя оператора" else "Moniker") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = tempEmail,
-                        onValueChange = { tempEmail = it },
-                        label = { Text(if (isRu) "Email (необязательно)" else "Email (optional)") },
+                        label = { Text(if (isRu) "Никнейм" else "Moniker") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -775,14 +736,14 @@ fun ProfileScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onRegisterUser(tempName, tempEmail)
+                        onRegisterUser(tempName.ifBlank { "user" }, tempEmail)
                         showRegisterDialog = false
                     }
                 ) {
                     Text(
                         text = if (isRu) "Сохранить" else "Save",
                         fontWeight = FontWeight.Bold,
-                        color = if (isDarkTheme) Color.White else Color(0xFF09090B)
+                        color = textPrimary
                     )
                 }
             },
@@ -790,133 +751,10 @@ fun ProfileScreen(
                 TextButton(onClick = { showRegisterDialog = false }) {
                     Text(
                         text = if (isRu) "Отмена" else "Cancel",
-                        color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
-                    )
-                }
-            },
-            containerColor = if (isDarkTheme) Color(0xFF18181B) else Color.White
-        )
-    }
-}
-
-@Composable
-private fun ProfileDetailRow(
-    label: String,
-    value: String,
-    valueColor: Color? = null,
-    isMonospace: Boolean = false,
-    isDarkTheme: Boolean = false
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
-        )
-        Text(
-            text = value,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = if (isMonospace) FontFamily.Monospace else FontFamily.Default,
-            color = valueColor ?: (if (isDarkTheme) Color.White else Color(0xFF09090B))
-        )
-    }
-}
-
-@Composable
-private fun ProfileMetricBlock(
-    label: String,
-    value: String,
-    isDarkTheme: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isDarkTheme) DarkSurfaceInner else Color(0xFFF4F4F6))
-            .padding(vertical = 10.dp, horizontal = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = value,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isDarkTheme) Color.White else Color(0xFF09090B)
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
-        )
-    }
-}
-
-@Composable
-private fun SessionHistoryItemCard(
-    session: VpnSession,
-    isDarkTheme: Boolean,
-    isRu: Boolean
-) {
-    val dateFormat = remember { SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()) }
-    val timeFormatted = remember(session.startTimeMillis) {
-        dateFormat.format(Date(session.startTimeMillis))
-    }
-    val mbTotal = (session.bytesDownloaded + session.bytesUploaded) / (1024f * 1024f)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isDarkTheme) DarkSurfaceCard else Color.White)
-            .border(1.dp, if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA), RoundedCornerShape(16.dp))
-            .padding(14.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = session.flagEmoji.ifBlank { "🌐" },
-                    fontSize = 20.sp
-                )
-                Column {
-                    Text(
-                        text = "${session.country} · ${session.city}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDarkTheme) Color.White else Color(0xFF09090B)
-                    )
-                    Text(
-                        text = "$timeFormatted · ${session.protocol}",
-                        fontSize = 11.sp,
-                        color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
+                        color = textSecondary
                     )
                 }
             }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = String.format("%.1f MB", mbTotal),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDarkTheme) Color.White else Color(0xFF09090B)
-                )
-                Text(
-                    text = "${session.durationSeconds / 60}m ${session.durationSeconds % 60}s",
-                    fontSize = 11.sp,
-                    color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
-                )
-            }
-        }
+        )
     }
 }

@@ -83,8 +83,7 @@ fun OnboardingScreen(
         // Living animated astral mesh network background
         MeshNetworkBackground(
             modifier = Modifier.fillMaxSize(),
-            isDarkTheme = isDarkTheme,
-            isConnected = false
+            isDarkTheme = isDarkTheme
         )
 
         Column(

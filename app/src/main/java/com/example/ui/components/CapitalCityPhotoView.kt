@@ -22,21 +22,22 @@ import coil.request.ImageRequest
 import com.example.R
 import com.example.model.ServerLocation
 
-fun getLocalCityDrawable(cityCode: String): Int? {
-    return when (cityCode.uppercase()) {
-        "TYO" -> R.drawable.img_city_tokyo
-        "LON" -> R.drawable.img_city_london
-        "PAR" -> R.drawable.img_city_paris
-        "BER" -> R.drawable.img_city_berlin
-        "AMS" -> R.drawable.img_city_amsterdam
-        "RKV" -> R.drawable.img_city_reykjavik
-        "WAS", "DC", "NYC" -> R.drawable.img_city_washington
-        "ZRH" -> R.drawable.img_city_zurich
-        "FRA" -> R.drawable.img_city_frankfurt
-        "MAD" -> R.drawable.img_city_madrid
-        "WAW" -> R.drawable.img_city_warsaw
-        else -> R.drawable.img_city_frankfurt
+fun getLocalCityDrawable(context: android.content.Context, cityCode: String): Int? {
+    val name = when (cityCode.uppercase()) {
+        "TYO" -> "img_city_tokyo"
+        "LON" -> "img_city_london"
+        "PAR" -> "img_city_paris"
+        "BER" -> "img_city_berlin"
+        "AMS" -> "img_city_amsterdam"
+        "RKV", "HEL" -> "img_city_reykjavik"
+        "WAS", "DC", "NYC" -> "img_city_washington"
+        "ZRH" -> "img_city_zurich"
+        "FRA" -> "img_city_frankfurt"
+        "WAW" -> "img_city_warsaw"
+        else -> "img_city_frankfurt"
     }
+    val resId = context.resources.getIdentifier(name, "drawable", context.packageName)
+    return if (resId != 0) resId else null
 }
 
 @Composable
@@ -46,6 +47,7 @@ fun CapitalCityPhotoView(
     darkenFactor: Float = 0.35f,
     showCoordinates: Boolean = false
 ) {
+    val context = LocalContext.current
     val monochromeMatrix = remember {
         ColorMatrix().apply {
             setToSaturation(0f)
@@ -53,7 +55,7 @@ fun CapitalCityPhotoView(
     }
 
     val localDrawable = remember(server.cityCode) {
-        getLocalCityDrawable(server.cityCode)
+        getLocalCityDrawable(context, server.cityCode)
     }
 
     Box(

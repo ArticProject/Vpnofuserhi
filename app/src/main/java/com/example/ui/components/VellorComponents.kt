@@ -175,76 +175,50 @@ fun VellorHeroCard(
         modifier = modifier
             .fillMaxWidth()
             .height(290.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF09090B))
+            .clip(RoundedCornerShape(26.dp))
+            .background(Color(0xFF09090B)),
+        contentAlignment = Alignment.Center
     ) {
-        // High-resolution architectural photo (Tokyo / Capital city)
+        // High-resolution architectural photo
         CapitalCityPhotoView(
             server = selectedServer,
             modifier = Modifier.fillMaxSize(),
-            darkenFactor = 0.35f
+            darkenFactor = 0.20f
         )
 
-        // Vignette gradient
+        // Seamless transition gradient from main background into picture
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.25f),
-                            Color.Black.copy(alpha = 0.55f)
+                            Color(0xFF09090B).copy(alpha = 0.85f),
+                            Color(0xFF09090B).copy(alpha = 0.20f),
+                            Color(0xFF09090B).copy(alpha = 0.35f),
+                            Color(0xFF09090B).copy(alpha = 0.90f)
                         )
                     )
                 )
         )
 
-        // Overlay Card on the left: Country and Capital plate
+        // Soft radial vignette around the center
         Box(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 18.dp, bottom = 22.dp)
+                .fillMaxSize()
                 .background(
-                    color = Color.Black.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                .border(0.8.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(if (isConnected) VellorEmerald else Color.White)
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color(0xFF09090B).copy(alpha = 0.65f)
+                        )
                     )
-                    Spacer(modifier = Modifier.width(7.dp))
-                    Text(
-                        text = "${selectedServer.country.uppercase()} · ${selectedServer.city.uppercase()}",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.2.sp
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "NATIONAL CAPITAL\nWIREGUARD 10G\nSECURE GATEWAY",
-                    color = Color.White.copy(alpha = 0.95f),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Black,
-                    lineHeight = 17.sp,
-                    letterSpacing = (-0.2).sp
                 )
-            }
-        }
+        )
 
-        // Connection Dial on the right
+        // Connection Dial right in the middle
         Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 24.dp),
+            modifier = Modifier.align(Alignment.Center),
             contentAlignment = Alignment.Center
         ) {
             // Ethereal harmonic multi-layer pulse rings when Connected

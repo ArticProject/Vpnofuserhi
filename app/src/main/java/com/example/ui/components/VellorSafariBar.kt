@@ -79,13 +79,11 @@ fun VellorSafariBar(
                     val icon = when (tab) {
                         AppTab.TUNNEL -> Icons.Filled.VpnKey
                         AppTab.NODES -> Icons.Filled.Dns
-                        AppTab.SHIELD -> Icons.Filled.Shield
                         AppTab.PROFILE -> Icons.Filled.Person
                     }
                     val label = when (tab) {
                         AppTab.TUNNEL -> if (isRu) "Туннель" else "Tunnel"
                         AppTab.NODES -> if (isRu) "Узлы" else "Nodes"
-                        AppTab.SHIELD -> if (isRu) "Защита" else "Shield"
                         AppTab.PROFILE -> if (isRu) "Профиль" else "Profile"
                     }
 

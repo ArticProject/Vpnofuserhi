@@ -51,9 +51,10 @@ import com.example.ui.theme.DarkSurfaceInner
 @Composable
 fun ActivationRequiredDialog(
     onDismissRequest: () -> Unit,
-    onActivateKey: (String) -> Boolean,
+    onActivateKey: (String) -> Unit,
     onNavigateToProfile: () -> Unit,
     activationError: String?,
+    activationBusy: Boolean,
     isDarkTheme: Boolean = false,
     currentLanguage: AppLanguage = AppLanguage.SYSTEM
 ) {
@@ -99,9 +100,9 @@ fun ActivationRequiredDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = if (isRu)
-                        "Для запуска безопасного туннеля и подключения к серверам 10G необходимо ввести персональный код доступа."
+                        "Введите личный код или ссылку подписки. TEST открывает общий тестовый доступ со сроком и трафиком на всех."
                     else
-                        "To establish a secure sovereign tunnel, please activate your personal access code.",
+                        "Enter your code or subscription link. TEST provides shared trial access with a shared expiry and traffic allowance.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
                     fontSize = 13.sp,
@@ -110,10 +111,10 @@ fun ActivationRequiredDialog(
 
                 OutlinedTextField(
                     value = inputKey,
-                    onValueChange = { inputKey = it.uppercase() },
+                    onValueChange = { inputKey = it },
                     placeholder = {
                         Text(
-                            text = if (isRu) "Например: VELLOR-VIP" else "e.g. VELLOR-VIP",
+                            text = if (isRu) "Код или ссылка подписки" else "Code or subscription link",
                             color = if (isDarkTheme) Color(0xFF52525B) else Color(0xFFA1A1AA),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 13.sp
@@ -128,6 +129,7 @@ fun ActivationRequiredDialog(
                         )
                     },
                     singleLine = true,
+                    enabled = !activationBusy,
                     isError = activationError != null,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = if (isDarkTheme) Color.White else Color(0xFF09090B),
@@ -138,13 +140,13 @@ fun ActivationRequiredDialog(
                     ),
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Characters,
+                        capitalization = KeyboardCapitalization.None,
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = {
                             keyboardController?.hide()
-                            if (inputKey.isNotBlank()) {
+                            if (inputKey.isNotBlank() && !activationBusy) {
                                 onActivateKey(inputKey)
                             }
                         }
@@ -153,6 +155,8 @@ fun ActivationRequiredDialog(
                         .fillMaxWidth()
                         .testTag("dialog_key_input")
                 )
+
+                if (activationBusy) { Text(if (isRu) "Проверяем подписку…" else "Checking subscription…") }
 
                 if (activationError != null) {
                     Text(
@@ -180,13 +184,13 @@ fun ActivationRequiredDialog(
                             .background(if (isDarkTheme) DarkSurfaceInner else Color(0xFFF4F4F6))
                             .border(0.8.dp, if (isDarkTheme) DarkSurfaceBorder else Color(0xFFE5E5EA), RoundedCornerShape(6.dp))
                             .bounceClick(scaleDown = 0.94f) {
-                                inputKey = "VELLOR-VIP"
-                                onActivateKey("VELLOR-VIP")
+                                inputKey = "TEST"
+                                onActivateKey("TEST")
                             }
                             .padding(horizontal = 7.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = "VELLOR-VIP",
+                            text = "TEST",
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
@@ -203,7 +207,7 @@ fun ActivationRequiredDialog(
                     .background(if (isDarkTheme) Color.White else Color(0xFF09090B))
                     .bounceClick(scaleDown = 0.94f) {
                         keyboardController?.hide()
-                        if (inputKey.isNotBlank()) {
+                        if (inputKey.isNotBlank() && !activationBusy) {
                             onActivateKey(inputKey)
                         } else {
                             onDismissRequest()
@@ -214,7 +218,7 @@ fun ActivationRequiredDialog(
                     .testTag("dialog_activate_btn")
             ) {
                 Text(
-                    text = if (inputKey.isNotBlank()) {
+                    text = if (inputKey.isNotBlank() && !activationBusy) {
                         if (isRu) "Активировать" else "Activate"
                     } else {
                         if (isRu) "В Профиль" else "Open Profile"

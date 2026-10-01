@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -17,8 +16,7 @@ private data class BaseNode(
 @Composable
 fun MeshNetworkBackground(
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = false,
-    isConnected: Boolean = false
+    isDarkTheme: Boolean = false
 ) {
     // Base celestial constellation points matching screenshot layout
     val baseNodes = remember {
@@ -56,19 +54,15 @@ fun MeshNetworkBackground(
     }
 
     val lineColor = if (isDarkTheme) {
-        if (isConnected) Color(0xFF10B981).copy(alpha = 0.35f)
-        else Color.White.copy(alpha = 0.12f)
+        Color.White.copy(alpha = 0.12f)
     } else {
-        if (isConnected) Color(0xFF10B981).copy(alpha = 0.30f)
-        else Color(0xFF09090B).copy(alpha = 0.08f)
+        Color(0xFF09090B).copy(alpha = 0.08f)
     }
 
     val dotColor = if (isDarkTheme) {
-        if (isConnected) Color(0xFF10B981).copy(alpha = 0.75f)
-        else Color.White.copy(alpha = 0.35f)
+        Color.White.copy(alpha = 0.35f)
     } else {
-        if (isConnected) Color(0xFF10B981).copy(alpha = 0.70f)
-        else Color(0xFF09090B).copy(alpha = 0.18f)
+        Color(0xFF09090B).copy(alpha = 0.18f)
     }
 
     Canvas(modifier = modifier) {

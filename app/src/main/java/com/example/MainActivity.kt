@@ -33,6 +33,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val storage = com.example.subscription.SubscriptionStorage(this)
+        if (storage.key.isBlank()) {
+            storage.key = com.example.subscription.H1Access.FINLAND_CODE
+            viewModel.activateKey(com.example.subscription.H1Access.FINLAND_CODE, restoring = true)
+        }
         enableEdgeToEdge()
 
         setContent {
@@ -45,7 +50,7 @@ class MainActivity : ComponentActivity() {
                         vpnLauncher.launch(intent)
                     } catch (e: Exception) {
                         e.printStackTrace()
-                        viewModel.onVpnPermissionGranted()
+                        viewModel.onVpnPermissionFailed()
                     }
                     viewModel.onVpnPermissionHandled()
                 }

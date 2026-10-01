@@ -25,9 +25,9 @@ enum class VpnProtocol(
         description = "Battle-tested open standard with industry-grade reliability."
     ),
     VELLOR_STEALTH(
-        displayName = "Vellor Stealth (X-Ray)",
-        cipher = "Quantum-ChaCha20",
+        displayName = "VLESS / REALITY",
+        cipher = "TLS 1.3",
         badge = "ANTI-CENSOR",
-        description = "Obfuscated traffic masquerading as standard HTTPS TLS 1.3 handshakes."
+        description = "VLESS traffic through the configured REALITY server."
     )
 }
