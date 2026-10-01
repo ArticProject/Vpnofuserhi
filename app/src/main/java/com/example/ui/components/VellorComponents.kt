@@ -166,6 +166,7 @@ fun VellorHeroCard(
     vpnState: VpnState,
     selectedServer: ServerLocation,
     onToggleConnect: () -> Unit,
+    isRu: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isConnected = vpnState == VpnState.CONNECTED
@@ -293,9 +294,9 @@ fun VellorHeroCard(
 
                         Text(
                             text = when (vpnState) {
-                                VpnState.CONNECTED -> "SECURE"
-                                VpnState.CONNECTING, VpnState.DISCONNECTING -> "LINKING"
-                                VpnState.DISCONNECTED -> "CONNECT"
+                                VpnState.CONNECTED -> if (isRu) "ЗАЩИТА" else "SECURE"
+                                VpnState.CONNECTING, VpnState.DISCONNECTING -> if (isRu) "СВЯЗЬ" else "LINKING"
+                                VpnState.DISCONNECTED -> if (isRu) "СТАРТ" else "CONNECT"
                             },
                             color = iconTint,
                             fontSize = 9.sp,

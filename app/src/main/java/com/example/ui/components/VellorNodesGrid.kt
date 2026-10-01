@@ -29,12 +29,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AppLanguage
 import com.example.model.ServerLocation
 import com.example.model.VpnState
+import com.example.ui.theme.VellorAmber
 import com.example.ui.theme.VellorEmerald
+import com.example.ui.theme.VellorRed
 
 @Composable
 fun VellorHeadlineSection(
@@ -42,50 +45,112 @@ fun VellorHeadlineSection(
     selectedServer: ServerLocation,
     onToggleConnect: () -> Unit,
     onInspectClick: () -> Unit,
+    durationFormatted: String = "00:00",
+    pingMs: Int = 0,
+    downloadMbps: Float = 0f,
+    uploadMbps: Float = 0f,
     currentLanguage: AppLanguage = AppLanguage.SYSTEM,
     isDarkTheme: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isConnected = vpnState == VpnState.CONNECTED
+    val isBusy = vpnState == VpnState.CONNECTING || vpnState == VpnState.DISCONNECTING
     val isRu = currentLanguage == AppLanguage.RUSSIAN
+    val primary = if (isDarkTheme) Color.White else Color(0xFF09090B)
+    val secondary = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A)
+    val statusColor by animateColorAsState(
+        targetValue = when {
+            isConnected -> VellorEmerald
+            isBusy -> VellorAmber
+            else -> VellorRed
+        },
+        animationSpec = spring(stiffness = 300f),
+        label = "status_color"
+    )
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
     ) {
-        Text(
-            text = if (isRu) "НОВЫЙ ПРОТОКОЛ" else "NEW PROTOCOL",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.4.sp,
-            fontSize = 11.sp
-        )
+        Row(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(statusColor.copy(alpha = 0.12f))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = when (vpnState) {
+                    VpnState.CONNECTED -> if (isRu) "ЗАЩИЩЕНО" else "PROTECTED"
+                    VpnState.CONNECTING -> if (isRu) "ПОДКЛЮЧЕНИЕ…" else "CONNECTING…"
+                    VpnState.DISCONNECTING -> if (isRu) "ОТКЛЮЧЕНИЕ…" else "DISCONNECTING…"
+                    VpnState.DISCONNECTED -> if (isRu) "НЕ ЗАЩИЩЕНО" else "NOT PROTECTED"
+                },
+                color = statusColor,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                fontSize = 11.sp
+            )
+        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // Headline formatted on 3 lines strictly matching user image
         Text(
-            text = if (isRu) "Повседневная приватность с\nчетким\nсилуэтом."
-                   else "Everyday privacy with\na\nsharp silhouette.",
+            text = "${selectedServer.flagEmoji} ${selectedServer.city}",
             style = MaterialTheme.typography.displayMedium,
-            color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+            color = primary,
             fontWeight = FontWeight.Bold,
+            fontSize = 32.sp,
             lineHeight = 36.sp,
-            letterSpacing = (-1.2).sp
+            letterSpacing = (-1).sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = if (isRu) "Минималистичный суверенный туннель, направляющий трафик через ${selectedServer.city} и мировые узлы."
-                   else "Minimal sovereign tunnel routing device traffic through ${selectedServer.city} and global nodes.",
+            text = "${selectedServer.country} · VLESS · REALITY",
             style = MaterialTheme.typography.bodyLarge,
-            color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
-            lineHeight = 22.sp,
-            fontSize = 15.sp
+            color = secondary,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            VellorStatTile(
+                label = if (isRu) "ВРЕМЯ" else "TIME",
+                value = if (isConnected) durationFormatted else "—",
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.weight(1f)
+            )
+            VellorStatTile(
+                label = if (isRu) "ПИНГ" else "PING",
+                value = if (isConnected && pingMs > 0) "$pingMs ms" else "—",
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.weight(1f)
+            )
+            VellorStatTile(
+                label = "↓ / ↑ Mbps",
+                value = if (isConnected) "${formatMbps(downloadMbps)} / ${formatMbps(uploadMbps)}" else "—",
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.weight(1.3f)
+            )
+        }
 
         Spacer(modifier = Modifier.height(22.dp))
 
@@ -144,7 +209,7 @@ fun VellorHeadlineSection(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (isRu) "Инфо (${selectedServer.cityCode})" else "Inspect (${selectedServer.cityCode})",
+                    text = if (isRu) "Сервер ${selectedServer.cityCode}" else "Server ${selectedServer.cityCode}",
                     color = if (isDarkTheme) Color.White else Color(0xFF09090B),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
@@ -153,6 +218,47 @@ fun VellorHeadlineSection(
         }
     }
 }
+
+@Composable
+private fun VellorStatTile(
+    label: String,
+    value: String,
+    isDarkTheme: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (isDarkTheme) Color(0xFF141416) else Color(0xFFF4F4F6))
+            .border(
+                1.dp,
+                if (isDarkTheme) Color(0xFF27272A) else Color(0xFFE5E5EA),
+                RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.8.sp,
+            maxLines = 1
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            color = if (isDarkTheme) Color.White else Color(0xFF09090B),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun formatMbps(value: Float): String =
+    if (value >= 10f) value.toInt().toString() else String.format(java.util.Locale.US, "%.1f", value)
 
 @Composable
 fun VellorFeaturedNodesSection(
@@ -173,7 +279,7 @@ fun VellorFeaturedNodesSection(
             .padding(horizontal = 20.dp)
     ) {
         Text(
-            text = if (isRu) "ИЗБРАННОЕ" else "FEATURED",
+            text = if (isRu) "СЕРВЕРЫ" else "SERVERS",
             style = MaterialTheme.typography.labelSmall,
             color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
             fontWeight = FontWeight.SemiBold,
@@ -184,7 +290,7 @@ fun VellorFeaturedNodesSection(
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = if (isRu) "Выбранные узлы" else "Selected nodes",
+            text = if (isRu) "Доступные локации" else "Available locations",
             style = MaterialTheme.typography.headlineMedium,
             color = if (isDarkTheme) Color.White else Color(0xFF09090B),
             fontWeight = FontWeight.Bold,
@@ -195,7 +301,7 @@ fun VellorFeaturedNodesSection(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = if (isRu) "Быстрый выбор из всей сети серверов." else "A quick edit from the full network.",
+            text = if (isRu) "Нажмите на карточку, чтобы сменить сервер." else "Tap a card to switch servers.",
             style = MaterialTheme.typography.bodyMedium,
             color = if (isDarkTheme) Color(0xFFA1A1AA) else Color(0xFF71717A),
             fontSize = 14.sp
@@ -219,6 +325,7 @@ fun VellorFeaturedNodesSection(
                         isConnected = isConnected && isSelected,
                         onConnect = { onSelectServer(server) },
                         onInspect = { onInspectServer(server) },
+                        isRu = isRu,
                         isDarkTheme = isDarkTheme,
                         modifier = Modifier.weight(1f)
                     )
@@ -239,6 +346,7 @@ fun VellorNodeCard(
     isConnected: Boolean,
     onConnect: () -> Unit,
     onInspect: () -> Unit,
+    isRu: Boolean = false,
     isDarkTheme: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -295,7 +403,7 @@ fun VellorNodeCard(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Inspect",
+                    text = if (isRu) "Инфо" else "Info",
                     color = Color(0xFF09090B),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium
@@ -311,7 +419,7 @@ fun VellorNodeCard(
                     .padding(horizontal = 7.dp, vertical = 3.dp)
             ) {
                 Text(
-                    text = "${server.city.uppercase()} · ${server.countryCode}",
+                    text = "${server.flagEmoji} ${server.city.uppercase()}",
                     color = Color.White,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
@@ -364,7 +472,7 @@ fun VellorNodeCard(
                         Spacer(modifier = Modifier.width(4.dp))
                     }
                     Text(
-                        text = "${server.pingMs}ms",
+                        text = if (server.pingMs > 0) "${server.pingMs} ms" else "VLESS",
                         color = if (isSelected && isConnected) VellorEmerald
                                 else if (isDarkTheme) Color(0xFFA1A1AA)
                                 else Color(0xFF71717A),
@@ -406,7 +514,11 @@ fun VellorNodeCard(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = if (isSelected && isConnected) "Connected" else if (isSelected) "Selected" else "Route Node",
+                text = when {
+                    isSelected && isConnected -> if (isRu) "Подключено" else "Connected"
+                    isSelected -> if (isRu) "Выбран" else "Selected"
+                    else -> if (isRu) "Выбрать" else "Select"
+                },
                 color = btnTextCol,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold

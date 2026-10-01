@@ -25,6 +25,7 @@ import com.example.ui.components.MeshNetworkBackground
 import com.example.ui.components.VellorSafariBar
 import com.example.viewmodel.VpnViewModel
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @Composable
 fun VellorApp(
@@ -33,14 +34,19 @@ fun VellorApp(
 ) {
     val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsStateWithLifecycle()
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
-    val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+    val chosenLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+    val selectedLanguage = if (chosenLanguage == AppLanguage.SYSTEM && Locale.getDefault().language == "ru") {
+        AppLanguage.RUSSIAN
+    } else {
+        chosenLanguage
+    }
 
     // If onboarding is not completed yet, show the initial interactive cards flow
     if (!isOnboardingCompleted) {
         OnboardingScreen(
             isDarkTheme = isDarkTheme,
             onToggleDarkTheme = { viewModel.setDarkTheme(it) },
-            currentLanguage = selectedLanguage,
+            currentLanguage = chosenLanguage,
             onSelectLanguage = { viewModel.setLanguage(it) },
             onFinishOnboarding = { viewModel.completeOnboarding() },
             modifier = modifier
@@ -70,6 +76,7 @@ fun VellorApp(
     val downloadSpeed by viewModel.downloadSpeedMb.collectAsStateWithLifecycle()
     val uploadSpeed by viewModel.uploadSpeedMb.collectAsStateWithLifecycle()
     val pingMs by viewModel.pingMs.collectAsStateWithLifecycle()
+    val durationSeconds by viewModel.durationSeconds.collectAsStateWithLifecycle()
     val inspectingServer by viewModel.inspectingServer.collectAsStateWithLifecycle()
 
     val username by viewModel.username.collectAsStateWithLifecycle()
@@ -124,11 +131,16 @@ fun VellorApp(
                             allServers = servers,
                             downloadSpeedMb = downloadSpeed,
                             uploadSpeedMb = uploadSpeed,
-                            durationFormatted = viewModel.formattedDuration,
+                            durationFormatted = if (durationSeconds >= 3600) {
+                                String.format(Locale.US, "%02d:%02d:%02d", durationSeconds / 3600, durationSeconds / 60 % 60, durationSeconds % 60)
+                            } else {
+                                String.format(Locale.US, "%02d:%02d", durationSeconds / 60, durationSeconds % 60)
+                            },
                             pingMs = pingMs,
                             isDarkTheme = isDarkTheme,
                             onToggleDarkTheme = { viewModel.setDarkTheme(it) },
                             currentLanguage = selectedLanguage,
+                            selectedLanguage = chosenLanguage,
                             onSelectLanguage = { viewModel.setLanguage(it) },
                             onToggleConnect = { viewModel.toggleConnect() },
                             onSelectServer = { server ->

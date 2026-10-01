@@ -37,6 +37,13 @@ class VlessConfigTest {
         }
     }
 
+    @Test fun androidFingerprintUsesTls13CapableHello() {
+        val config = JSONObject(VlessConfig.build(PROFILE.replace("fp=chrome", "fp=android")))
+        val reality = config.getJSONArray("outbounds").getJSONObject(0)
+            .getJSONObject("streamSettings").getJSONObject("realitySettings")
+        assertEquals("chrome", reality.getString("fingerprint"))
+    }
+
     @Test fun trafficReadsProxyBytesOnly() {
         assertEquals(TrafficBytes(2000, 500), TrafficBytes.parse(
             "proxy,downlink,2000;direct,downlink,99999;proxy,uplink,500;proxy,uplink,-1;broken;"))

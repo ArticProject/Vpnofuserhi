@@ -84,6 +84,28 @@ object H1Access {
 
 class SubscriptionException(message: String) : Exception(message)
 
+/** Maps subscription link labels such as "Germany" to display metadata. */
+object ServerCatalog {
+    data class Place(val country: String, val countryCode: String, val city: String, val cityCode: String, val flag: String)
+
+    private val places = listOf(
+        listOf("germany", "германия", "deutschland", "🇩🇪") to Place("Германия", "DE", "Франкфурт", "FRA", "🇩🇪"),
+        listOf("finland", "финляндия", "suomi", "🇫🇮") to Place("Финляндия", "FI", "Хельсинки", "HEL", "🇫🇮"),
+        listOf("netherlands", "нидерланды", "holland", "🇳🇱") to Place("Нидерланды", "NL", "Амстердам", "AMS", "🇳🇱"),
+        listOf("france", "франция", "🇫🇷") to Place("Франция", "FR", "Париж", "PAR", "🇫🇷"),
+        listOf("united kingdom", "england", "britain", "великобритания", "англия", "🇬🇧") to Place("Великобритания", "GB", "Лондон", "LON", "🇬🇧"),
+        listOf("switzerland", "швейцария", "🇨🇭") to Place("Швейцария", "CH", "Цюрих", "ZRH", "🇨🇭"),
+        listOf("poland", "польша", "🇵🇱") to Place("Польша", "PL", "Варшава", "WAW", "🇵🇱"),
+        listOf("japan", "япония", "🇯🇵") to Place("Япония", "JP", "Токио", "TYO", "🇯🇵"),
+        listOf("united states", "usa", "сша", "америка", "🇺🇸") to Place("США", "US", "Вашингтон", "WAS", "🇺🇸")
+    )
+
+    fun find(label: String): Place? {
+        val text = label.lowercase()
+        return places.firstOrNull { (keys, _) -> keys.any { text.contains(it) } }?.second
+    }
+}
+
 data class Subscription(
     val servers: List<ServerLocation>,
     val expiresAt: Long?,
@@ -170,12 +192,17 @@ class H1SubscriptionClient(
                         val uri = URI(link)
                         val label = uri.fragment?.take(60)?.takeIf { it.isNotBlank() } ?: uri.host
                         if (label.contains("Испан", ignoreCase = true) || label.contains("Spain", ignoreCase = true)) null
-                        else ServerLocation(
-                            id = MessageDigest.getInstance("SHA-256").digest(link.toByteArray()).take(8).joinToString("") { "%02x".format(it) },
-                            country = label, countryCode = "", city = uri.host, cityCode = "VPN", flagEmoji = "🌐",
-                            pingMs = 0, loadPercent = 0, ipAddress = uri.host,
-                            vlessUrl = link, isLiveServer = true, isStealth = true
-                        )
+                        else {
+                            val place = ServerCatalog.find(label)
+                            ServerLocation(
+                                id = MessageDigest.getInstance("SHA-256").digest(link.toByteArray()).take(8).joinToString("") { "%02x".format(it) },
+                                country = place?.country ?: label, countryCode = place?.countryCode.orEmpty(),
+                                city = place?.city ?: uri.host, cityCode = place?.cityCode ?: "VPN",
+                                flagEmoji = place?.flag ?: "🌐",
+                                pingMs = 0, loadPercent = 0, ipAddress = uri.host,
+                                vlessUrl = link, isLiveServer = true, isStealth = true
+                            )
+                        }
                     } catch (_: IllegalArgumentException) { null }
                 }.distinctBy { it.vlessUrl }
                 val values = userInfo.orEmpty().split(';').filter { it.isNotBlank() }.associate { item ->
