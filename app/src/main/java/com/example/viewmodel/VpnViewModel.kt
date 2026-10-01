@@ -77,7 +77,6 @@ class VpnViewModel @JvmOverloads constructor(
     private val _speedHistory = MutableStateFlow<List<Float>>(listOf(0f))
     val speedHistory: StateFlow<List<Float>> = _speedHistory.asStateFlow()
 
-    // Security Toggles
     private val _killSwitch = MutableStateFlow(false)
     val killSwitch: StateFlow<Boolean> = _killSwitch.asStateFlow()
 
@@ -111,7 +110,6 @@ class VpnViewModel @JvmOverloads constructor(
     )
     val selectedLanguage: StateFlow<com.example.model.AppLanguage> = _selectedLanguage.asStateFlow()
 
-    // User Profile & Registration
     private val _username = MutableStateFlow(
         prefs.getString("user_username", "user") ?: "user"
     )
@@ -284,7 +282,6 @@ class VpnViewModel @JvmOverloads constructor(
             android.util.Log.e("Vellor", "Failed to register power save receiver", e)
         }
 
-        // Migrate away from the old, local-only activation flag and embedded administrator key.
         prefs.edit().remove("activated_key").remove("is_activated").apply()
         if (accessStorage.key.isNotBlank()) activateKey(accessStorage.key, restoring = true)
     }
@@ -363,6 +360,7 @@ class VpnViewModel @JvmOverloads constructor(
                     action = VellorVpnService.ACTION_CONNECT
                     putExtra(VellorVpnService.EXTRA_SERVER_NAME, _selectedServer.value.fullName)
                     putExtra(VellorVpnService.EXTRA_VLESS_URL, _selectedServer.value.vlessUrl)
+                    putExtra(VellorVpnService.EXTRA_SERVER_COUNTRY, _selectedServer.value.country)
                 }
                 androidx.core.content.ContextCompat.startForegroundService(getApplication(), intent)
             } catch (e: CancellationException) { throw e }
@@ -421,31 +419,6 @@ class VpnViewModel @JvmOverloads constructor(
         }
     }
 
-    private fun measureActivePing(): Int {
-        val start = System.currentTimeMillis()
-        return try {
-            java.net.Socket().use { socket ->
-                socket.connect(java.net.InetSocketAddress("1.1.1.1", 53), 1800)
-                (System.currentTimeMillis() - start).toInt().coerceAtLeast(1)
-            }
-        } catch (_: Exception) {
-            try {
-                val startHttp = System.currentTimeMillis()
-                val url = java.net.URL("https://www.gstatic.com/generate_204")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 2000
-                conn.readTimeout = 2000
-                conn.instanceFollowRedirects = false
-                conn.useCaches = false
-                conn.connect()
-                conn.disconnect()
-                (System.currentTimeMillis() - startHttp).toInt().coerceAtLeast(1)
-            } catch (_: Exception) {
-                -1
-            }
-        }
-    }
-
     private fun startTelemetry() {
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
@@ -466,6 +439,7 @@ class VpnViewModel @JvmOverloads constructor(
                 history.add(sample.downloadMbps)
                 if (history.size > 20) history.removeAt(0)
                 _speedHistory.value = history.toList()
+                _pingMs.value = sample.pingMs
             }
         }
 
@@ -687,7 +661,7 @@ class VpnViewModel @JvmOverloads constructor(
     }
 
     fun registerUser(newUsername: String, email: String) {
-        val cleanName = newUsername.trim().ifBlank { "Sovereign Operator" }
+        val cleanName = newUsername.trim().ifblank { "Sovereign Operator" }
         val cleanEmail = email.trim()
         _username.value = cleanName
         _userEmail.value = cleanEmail
@@ -714,23 +688,6 @@ class VpnViewModel @JvmOverloads constructor(
             } else {
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(durationMs)
-            }
-        } catch (_: Exception) {}
-    }
-
-    private fun vibratePattern() {
-        try {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vm = getApplication<Application>().getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vm?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                getApplication<Application>().getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val timings = longArrayOf(0, 30, 60, 30)
-                val amplitudes = intArrayOf(0, 180, 0, 240)
-                vibrator?.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
             }
         } catch (_: Exception) {}
     }
