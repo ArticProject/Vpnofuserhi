@@ -36,18 +36,21 @@ data class VpnTelemetry(
 )
 
 class VellorVpnService : VpnService() {
-    // All native core calls and descriptor ownership are serialized off the UI thread.
     private var vpnInterface: ParcelFileDescriptor? = null
     private var engine: VpnEngine? = null
     private var trafficTask: ScheduledFuture<*>? = null
     private val generation = AtomicLong()
     private val main = Handler(Looper.getMainLooper())
+    private var currentServerName: String = "Vellor"
+    private var currentServerCountry: String = ""
+    private var currentPingMs: Int = 0
 
     companion object {
         const val ACTION_CONNECT = "com.example.vpn.ACTION_CONNECT"
         const val ACTION_DISCONNECT = "com.example.vpn.ACTION_DISCONNECT"
         const val EXTRA_SERVER_NAME = "extra_server_name"
         const val EXTRA_VLESS_URL = "extra_vless_url"
+        const val EXTRA_SERVER_COUNTRY = "extra_server_country"
         const val CHANNEL_ID = "vellor_vpn_channel"
         const val NOTIFICATION_ID = 1001
         private val worker = Executors.newSingleThreadScheduledExecutor { task ->
@@ -67,21 +70,25 @@ class VellorVpnService : VpnService() {
         if (intent?.action == ACTION_CONNECT) {
             val serverName = intent.getStringExtra(EXTRA_SERVER_NAME)
             val vlessUrl = intent.getStringExtra(EXTRA_VLESS_URL)
+            val serverCountry = intent.getStringExtra(EXTRA_SERVER_COUNTRY) ?: ""
             if (vlessUrl.isNullOrBlank()) {
                 val storage = com.example.subscription.SubscriptionStorage(this)
                 val server = com.example.subscription.H1Access.DEFAULT_SERVERS.firstOrNull { it.id == storage.selectedServerId }
                     ?: com.example.subscription.H1Access.FINLAND_SERVER
-                startVpn(server.fullName, server.vlessUrl)
+                startVpn(server.fullName, server.country, server.vlessUrl)
             } else {
-                startVpn(serverName ?: "Vellor", vlessUrl)
+                startVpn(serverName ?: "Vellor", serverCountry, vlessUrl)
             }
         } else stopVpn()
         return START_NOT_STICKY
     }
 
-    private fun startVpn(serverName: String, profile: String) {
+    private fun startVpn(serverName: String, serverCountry: String, profile: String) {
         val request = generation.incrementAndGet()
         owner = this
+        currentServerName = serverName
+        currentServerCountry = serverCountry
+        currentPingMs = 0
         connectionFailed.value = false
         errorMessage.value = ""
         connectionState.value = VpnState.CONNECTING
@@ -89,7 +96,7 @@ class VellorVpnService : VpnService() {
             check(prepare(this) == null)
             createNotificationChannel()
             ServiceCompat.startForeground(this, NOTIFICATION_ID,
-                createNotification("Подключение: $serverName"),
+                createNotification("Подключение к $serverCountry...", 0),
                 if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED else 0)
         } catch (_: Exception) {
             fail(request, "Не удалось запустить VPN. Проверьте разрешение Android.")
@@ -106,8 +113,6 @@ class VellorVpnService : VpnService() {
                     .addAddress("fd66:7665:6c6c::2", 126)
                     .addRoute("0.0.0.0", 0).addRoute("::", 0)
                     .addDnsServer("1.1.1.1").addDnsServer("8.8.8.8")
-                    // Exclude the core's UID to prevent its transport sockets looping into TUN.
-                    // User apps (including their DNS/IPv6) are routed through the only outbound.
                     .addDisallowedApplication(packageName).setMtu(1500)
                 if (Build.VERSION.SDK_INT >= 29) builder.setMetered(false)
                 vpnInterface = builder.establish() ?: error("VPN permission revoked")
@@ -116,20 +121,20 @@ class VellorVpnService : VpnService() {
                 core.start(config, vpnInterface!!.fd)
                 val ping = core.probe()
                 if (!isCurrent(request)) { releaseTunnel(); return@execute }
-                core.readTraffic() // Exclude the startup probe from session totals.
-                telemetry.value = VpnTelemetry(pingMs = ping.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                core.readTraffic()
+                currentPingMs = ping.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                telemetry.value = VpnTelemetry(pingMs = currentPingMs,
                     startedAt = System.currentTimeMillis())
                 isRunning = true
                 connectionState.value = VpnState.CONNECTED
                 main.post {
                     if (isCurrent(request)) {
                         getSystemService(NotificationManager::class.java)
-                            .notify(NOTIFICATION_ID, createNotification("VLESS/REALITY: $serverName"))
+                            .notify(NOTIFICATION_ID, createNotification("$serverCountry • ${currentPingMs}ms", currentPingMs))
                     }
                 }
                 var lastSample = SystemClock.elapsedRealtime()
                 var ticks = 0
-                var currentPing = ping.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                 trafficTask = worker.scheduleWithFixedDelay({
                     if (isCurrent(request)) {
                         try {
@@ -138,23 +143,33 @@ class VellorVpnService : VpnService() {
                             val elapsed = (now - lastSample).coerceAtLeast(1)
                             lastSample = now
                             ticks++
+                            
+                            // Обновляем пинг каждые 3 секунды
                             if (ticks % 3 == 0) {
                                 try {
                                     val measured = core.probe().coerceAtMost(9999).toInt()
                                     if (measured in 1..2500) {
-                                        currentPing = measured
+                                        currentPingMs = measured
+                                        // Обновляем уведомление с новым пингом
+                                        main.post {
+                                            if (isCurrent(request)) {
+                                                getSystemService(NotificationManager::class.java)
+                                                    .notify(NOTIFICATION_ID, createNotification("$currentServerCountry • ${currentPingMs}ms", currentPingMs))
+                                            }
+                                        }
                                     }
                                 } catch (_: Exception) {
-                                    // Keep current ping
+                                    // Оставляем текущий пинг
                                 }
                             }
+                            
                             val previous = telemetry.value
                             telemetry.value = previous.copy(
                                 downloaded = previous.downloaded + bytes.downloaded,
                                 uploaded = previous.uploaded + bytes.uploaded,
                                 downloadMbps = bytes.downloaded * 8f / (elapsed * 1000f),
                                 uploadMbps = bytes.uploaded * 8f / (elapsed * 1000f),
-                                pingMs = currentPing
+                                pingMs = currentPingMs
                             )
                         } catch (_: Exception) {
                             fail(request, "VPN остановлен из-за ошибки ядра. Подключитесь повторно.")
@@ -184,10 +199,9 @@ class VellorVpnService : VpnService() {
     private fun releaseTunnel() {
         trafficTask?.cancel(false)
         trafficTask = null
-        // The Android Xray TUN implementation borrows this fd; Java owns/closes it.
-        try { engine?.close() } catch (_: Exception) { /* Still close TUN on failure. */ }
+        try { engine?.close() } catch (_: Exception) { }
         engine = null
-        try { vpnInterface?.close() } catch (_: Exception) { /* Already closed. */ }
+        try { vpnInterface?.close() } catch (_: Exception) { }
         vpnInterface = null
         if (owner === this) isRunning = false
     }
@@ -226,7 +240,7 @@ class VellorVpnService : VpnService() {
         super.onDestroy()
     }
 
-    private fun createNotification(statusText: String): Notification {
+    private fun createNotification(statusText: String, pingMs: Int): Notification {
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -242,6 +256,7 @@ class VellorVpnService : VpnService() {
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(statusText))
             .build()
     }
 
